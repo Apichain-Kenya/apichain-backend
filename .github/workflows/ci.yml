@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: apichain
+          POSTGRES_PASSWORD: apichain
+          POSTGRES_DB: apichain_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U apichain"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://apichain:apichain@localhost:5432/apichain_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies (frozen)
+        run: uv sync --frozen
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type check (mypy)
+        run: uv run mypy
+
+      - name: Tests (unit + integration, real Postgres/PostGIS)
+        run: uv run pytest -q
+
+      - name: Dependency audit (pip-audit)
+        run: |
+          uv export --frozen --no-dev --format requirements-txt > requirements-audit.txt
+          uv tool run pip-audit -r requirements-audit.txt --disable-pip
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t apichain-backend:ci .
