@@ -23,7 +23,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://apichain:apichain@localhost:5432/apichain_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history for the gitleaks secret scan
 
@@ -60,6 +60,6 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build image
         run: docker build -t apichain-backend:ci .
