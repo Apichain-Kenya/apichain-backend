@@ -24,6 +24,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://apichain:apichain@localhost:5432/apichain_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for the gitleaks secret scan
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -50,10 +52,10 @@ jobs:
           uv export --frozen --no-dev --format requirements-txt > requirements-audit.txt
           uv tool run pip-audit -r requirements-audit.txt --disable-pip
 
-      - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Secret scan (gitleaks binary, no org license needed)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git . --no-banner --redact --exit-code 1
 
   docker:
     runs-on: ubuntu-latest
