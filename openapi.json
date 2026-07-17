@@ -1,0 +1,75 @@
+{
+  "components": {
+    "schemas": {
+      "PingResponse": {
+        "description": "Minimal typed response so the OpenAPI schema has real content for the\ngenerated TypeScript client to consume. Phase 1 replaces this with the\nreal domain schemas.",
+        "properties": {
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "version"
+        ],
+        "title": "PingResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Honey provenance and traceability: hash-chained audit log, Merkle anchoring via OpenTimestamps, PostGIS geospatial records.",
+    "title": "ApiChain v2 Backend",
+    "version": "2.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/v2/ping": {
+      "get": {
+        "description": "Typed liveness probe under /v2. Exists to give the contract guardrails\na real typed endpoint to generate and consume; not a domain endpoint.",
+        "operationId": "ping_v2_ping_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ping",
+        "tags": [
+          "meta"
+        ]
+      }
+    }
+  }
+}
