@@ -1,0 +1,19 @@
+# Publish the OpenAPI schema as a versioned artifact on every tagged release
+# (05 §6.2 guardrail 1). The client pins a specific tag's schema.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  attach-openapi:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Attach openapi.json to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: openapi.json

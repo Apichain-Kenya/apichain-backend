@@ -24,8 +24,6 @@ jobs:
       DATABASE_URL: postgresql+psycopg://apichain:apichain@localhost:5432/apichain_test
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # full history for the gitleaks secret scan
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -44,18 +42,18 @@ jobs:
       - name: Type check (mypy)
         run: uv run mypy
 
-      - name: Tests (unit + integration, real Postgres/PostGIS)
+      - name: Tests (unit + integration + contract, real Postgres/PostGIS)
         run: uv run pytest -q
+
+      - name: OpenAPI schema is up to date (contract guardrail)
+        run: |
+          uv run python scripts/export_openapi.py
+          git diff --exit-code openapi.json
 
       - name: Dependency audit (pip-audit)
         run: |
           uv export --frozen --no-dev --format requirements-txt > requirements-audit.txt
           uv tool run pip-audit -r requirements-audit.txt --disable-pip
-
-      - name: Secret scan (gitleaks binary, no org license needed)
-        run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
-          ./gitleaks git . --no-banner --redact --exit-code 1
 
   docker:
     runs-on: ubuntu-latest
@@ -63,3 +61,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t apichain-backend:ci .
+
+  # Shared, reusable cross-repo gates (05 §6.2 guardrail 4). Secret scan lives
+  # here so both repos run byte-identical logic; drift cannot creep back in.
+  shared:
+    uses: ./.github/workflows/quality-gates.yml
