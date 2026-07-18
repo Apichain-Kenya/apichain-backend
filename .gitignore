@@ -8,3 +8,6 @@ __pycache__/
 .coverage
 htmlcov/
 dist/
+
+# Claude Code local files: never committed (team discipline, carried from v1)
+.claude/
