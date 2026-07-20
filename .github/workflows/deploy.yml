@@ -1,0 +1,25 @@
+name: deploy-staging
+
+# STATUS: SKELETON, INERT until activated. The deploy job runs ONLY when the
+# repo variable DEPLOY_ENABLED == 'true'. That variable is unset today, so every
+# trigger skips harmlessly and no secret is required for green CI. This workflow
+# is UNTESTED — its action inputs must be verified during the first real deploy.
+# Activation (set the variable + DIGITALOCEAN_ACCESS_TOKEN secret): see
+# DEPLOYMENT.md. Kept minimal on purpose; the runbook is the source of truth.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to DigitalOcean App Platform
+        uses: digitalocean/app_action/deploy@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          app_spec_location: .do/app.yaml
