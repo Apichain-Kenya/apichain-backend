@@ -52,13 +52,16 @@ def test_hash_length_is_32_bytes():
 
 
 def test_uses_sort_keys_in_serialization():
-    """Lock in the implementation choice: the serializer must produce
+    """Lock in the implementation choice: the single serializer must produce
     sorted-key JSON. If someone changes this, two writers with identical
-    semantic input produce different anchors."""
+    semantic input produce different anchors. Since P1-C the serializer lives
+    in `canonical_bytes` (which compute_data_hash and the audit chain share)."""
     import inspect
 
-    src = inspect.getsource(compute_data_hash)
-    assert "sort_keys=True" in src, "compute_data_hash must call json.dumps with sort_keys=True"
+    from app.services.canonical import canonical_bytes
+
+    src = inspect.getsource(canonical_bytes)
+    assert "sort_keys=True" in src, "canonical_bytes must call json.dumps with sort_keys=True"
 
 
 def test_keccak_parity_with_v1_golden_vector():

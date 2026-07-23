@@ -5,11 +5,14 @@ description = "ApiChain v2 backend: FastAPI + PostgreSQL/PostGIS, hash-chained a
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.5",
+    "apscheduler>=3.11",
+    "bcrypt>=5.0",
     "eth-hash[pycryptodome]>=0.8.0",
     "fastapi>=0.139.2",
     "geoalchemy2>=0.20.0",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.2",
+    "pyjwt>=2.10",
     "requests>=2.34.2",
     "shapely>=2.1.2",
     "sqlalchemy>=2.0.51",
@@ -35,6 +38,23 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic autogenerates one long sa.Column(...) per line; line length is not
+# meaningful in generated migrations. Import order / typing stay enforced.
+"alembic/versions/*" = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are called in argument defaults by
+# design; they are effectively immutable, so B008 does not apply to them.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Header",
+    "fastapi.Body",
+    "fastapi.Security",
+]
 
 [tool.mypy]
 python_version = "3.12"

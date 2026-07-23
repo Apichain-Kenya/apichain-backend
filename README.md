@@ -16,7 +16,7 @@ Phase 0 plan). v1 reference: `../_v1-archive/ApiChain--Backend` (see
 cp .env.example .env
 docker compose up --build
 # API:            http://localhost:8000  (docs at /docs, health at /health)
-# Postgres/PostGIS: localhost:5433 (apichain/apichain)
+# Postgres/PostGIS: localhost:5433, db apichain_v2 (apichain/apichain)
 # MinIO console:   http://localhost:9001 (apichain / apichain-dev)
 # Mailpit:         http://localhost:8025
 ```

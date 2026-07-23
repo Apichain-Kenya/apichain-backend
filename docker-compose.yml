@@ -6,7 +6,7 @@ services:
     ports: ["8000:8000"]
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://apichain:apichain@db:5432/apichain
+      DATABASE_URL: postgresql+psycopg://apichain:apichain@db:5432/apichain_v2
     volumes:
       - ./app:/srv/app # dev reload mount
     command:
@@ -23,8 +23,11 @@ services:
     environment:
       POSTGRES_USER: apichain
       POSTGRES_PASSWORD: apichain
-      POSTGRES_DB: apichain
-    ports: ["5433:5432"] # 5433 matches the v1 local convention
+      POSTGRES_DB: apichain_v2
+    # Host 5433 matches the v1 convention; the DB name is apichain_v2 (not
+    # apichain) so it never aliases the v1 database. Stop any native :5433
+    # Postgres before `docker compose up`, or this container can't bind the port.
+    ports: ["5433:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

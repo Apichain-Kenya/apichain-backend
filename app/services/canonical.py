@@ -12,10 +12,21 @@ from datetime import UTC, datetime
 from eth_hash.auto import keccak
 
 
+def canonical_bytes(data: dict) -> bytes:
+    """Deterministic JSON encoding (sorted keys) as UTF-8 bytes.
+
+    The single serializer for the whole system. `compute_data_hash` hashes its
+    output, and the `audit_log` row-hash chain (P1-C) prepends `prev_hash` and
+    hashes over it directly (08 §1). One encoder is what guarantees a hash
+    recomputed anywhere — verify_chain, the client three-way match, Phase-2
+    Merkle leaves — agrees byte-for-byte.
+    """
+    return json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+
+
 def compute_data_hash(data: dict) -> bytes:
     """keccak256 over deterministic JSON (sorted keys). Returns 32 bytes."""
-    payload = json.dumps(data, sort_keys=True, default=str)
-    return keccak(payload.encode("utf-8"))
+    return keccak(canonical_bytes(data))
 
 
 def canonical_dt(dt: datetime | None) -> str | None:
