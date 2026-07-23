@@ -5,11 +5,14 @@ description = "ApiChain v2 backend: FastAPI + PostgreSQL/PostGIS, hash-chained a
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.5",
+    "apscheduler>=3.11",
+    "bcrypt>=5.0",
     "eth-hash[pycryptodome]>=0.8.0",
     "fastapi>=0.139.2",
     "geoalchemy2>=0.20.0",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.2",
+    "pyjwt>=2.10",
     "requests>=2.34.2",
     "shapely>=2.1.2",
     "sqlalchemy>=2.0.51",
