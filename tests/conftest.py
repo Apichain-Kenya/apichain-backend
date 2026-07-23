@@ -24,6 +24,13 @@ from alembic import command
 _ALL_TABLES = "audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _disable_scheduler():
+    """Keep the background integrity scheduler off during tests (P1-G)."""
+    app.config.settings.scheduler_enabled = False
+    yield
+
+
 @pytest.fixture(scope="session")
 def migrated_engine():
     base = make_url(app.config.settings.database_url)

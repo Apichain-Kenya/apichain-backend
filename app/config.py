@@ -25,5 +25,9 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 30
     bcrypt_rounds: int = 12
 
+    # Audit-chain integrity check (P1-G). The scheduler is disabled in tests.
+    scheduler_enabled: bool = True
+    integrity_check_interval_seconds: int = 300
+
 
 settings = Settings()

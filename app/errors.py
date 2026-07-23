@@ -44,3 +44,16 @@ async def api_error_handler(request: Request, exc: Exception) -> JSONResponse:
     if exc.details is not None:
         body["details"] = exc.details
     return JSONResponse(status_code=exc.status_code, content=body)
+
+
+async def data_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """SQLAlchemy DataError is SQLSTATE class 22 (data exception) — the client
+    sent a value the database cannot store (e.g. a NUL byte in text, a numeric
+    overflow). Always a 400, never a 500."""
+    return JSONResponse(
+        status_code=400,
+        content={
+            "code": "invalid_input",
+            "message": "Request contains a value the database cannot store",
+        },
+    )
