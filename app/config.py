@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Auth (Phase 1). Real secret comes from the environment; this default is
     # dev-only and must never reach staging/prod (the DO secret store supplies
     # it in Phase 5). `kid` key-rotation is deferred to Phase 5 (08 D2).
-    jwt_secret_key: str = "dev-only-insecure-change-me"
+    jwt_secret_key: str = "dev-only-insecure-change-me-in-env-32b+"
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30

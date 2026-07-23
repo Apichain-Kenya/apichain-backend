@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.errors import APIError, api_error_handler
 from app.routers import v2_router
 
 app = FastAPI(
@@ -10,6 +11,8 @@ app = FastAPI(
     "Merkle anchoring via OpenTimestamps, PostGIS geospatial records.",
     version="2.0.0",
 )
+
+app.add_exception_handler(APIError, api_error_handler)
 
 app.add_middleware(
     CORSMiddleware,
