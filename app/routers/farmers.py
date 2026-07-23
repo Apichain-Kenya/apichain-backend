@@ -2,7 +2,8 @@
 acceptance test: creates the farmer's credential + profile, captures consent,
 and appends the `farmer.enrolled` audit row — all in one transaction."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -12,21 +13,31 @@ from app.errors import APIError, error_responses
 from app.models import ConsentPurpose, Farmer, GrantedVia, Role, User
 from app.routers._context import request_context
 from app.schemas.farmers import FarmerEnrollRequest, FarmerResponse
-from app.services import audit_log, consent, security
+from app.services import audit_log, consent, idempotency, security
 
 router = APIRouter(prefix="/farmers", tags=["farmers"])
 _require_enroll = requires("farmer.enroll")
 
 
 @router.post(
-    "", response_model=FarmerResponse, status_code=201, responses=error_responses(401, 403, 409)
+    "",
+    response_model=FarmerResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 409),
 )
 def enroll_farmer(
     body: FarmerEnrollRequest,
     request: Request,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_enroll),
-) -> FarmerResponse:
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> FarmerResponse | JSONResponse:
+    idem = idempotency.begin(
+        db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
+    )
+    if idem.replay is not None:
+        return JSONResponse(status_code=idem.replay.status_code, content=idem.replay.body)
+
     clash = db.execute(
         select(User.id).where(or_(User.phone == body.phone, User.username == body.phone))
     ).first()
@@ -89,5 +100,7 @@ def enroll_farmer(
         ip=ip,
         user_agent=user_agent,
     )
+    response = FarmerResponse.model_validate(farmer)
+    idempotency.finish(db, idem, status_code=201, body=response.model_dump(mode="json"))
     db.commit()
-    return FarmerResponse.model_validate(farmer)
+    return response

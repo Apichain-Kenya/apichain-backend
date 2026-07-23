@@ -1,6 +1,37 @@
 {
   "components": {
     "schemas": {
+      "AuditHealthResponse": {
+        "properties": {
+          "chain_ok": {
+            "title": "Chain Ok",
+            "type": "boolean"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "rows_checked": {
+            "title": "Rows Checked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chain_ok",
+          "checked_at",
+          "rows_checked"
+        ],
+        "title": "AuditHealthResponse",
+        "type": "object"
+      },
       "BatchCreateRequest": {
         "properties": {
           "batch_code": {
@@ -384,6 +415,27 @@
         "summary": "Health"
       }
     },
+    "/v2/audit/health": {
+      "get": {
+        "operationId": "audit_health_v2_audit_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Audit Health",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
     "/v2/auth/login": {
       "post": {
         "operationId": "login_v2_auth_login_post",
@@ -539,6 +591,24 @@
     "/v2/batches": {
       "post": {
         "operationId": "create_batch_v2_batches_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -628,6 +698,24 @@
     "/v2/farmers": {
       "post": {
         "operationId": "enroll_farmer_v2_farmers_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

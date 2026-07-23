@@ -16,7 +16,7 @@ Never reinvent a keeper without reading its v1 original first.
 | `backend/app/models/farmer.py` | `app/models/identity.py` `Farmer` | Adapted (P1-B): typed; dropped `wallet_address` + `location` (Geography deferred to Phase 3) + `is_verified`/`verification_status`; `onboarded_by`→`enrolled_by`, added `user_id` link (08 D8) | `tests/test_migrations.py` |
 | `backend/app/models/batch.py` | `app/models/batch.py` `HoneyBatch` | Adapted (P1-B): typed; dropped six `*_tx_hash` + six lifecycle `*_at` + `blockchain_batch_id`; `current_state`(str)→`state`(enum) + `state_updated_at`; `blockchain_batch_id`→`batch_code` | `tests/test_migrations.py` |
 
-New in v2 (no v1 origin): `audit_log`, `consent_records`, `refresh_tokens`, `idempotency_keys` (models in `app/models/audit.py`, `auth.py`), the four PG enum types, and the spine baseline migration `8547454dfd88`.
+New in v2 (no v1 origin): `audit_log`, `consent_records`, `refresh_tokens`, `idempotency_keys` (models in `app/models/audit.py`, `auth.py`), the four PG enum types, and the spine baseline migration `8547454dfd88`. Services new in v2: `audit_log` (P1-C hash-chain writer), `security`+`refresh_tokens` (P1-D; JWT/bcrypt/rotation — the v1 `require_roles` *shape* carried into `deps.py`, but v1's custodial-wallet/oracle auth is gone), `consent` (P1-E), `integrity` (P1-G), `idempotency` (P1-H). Endpoints `/v2/auth/*`, `/v2/farmers`, `/v2/batches`, `/v2/audit/health` are v2-native (v1's `/auth`, `/farmers`, `/batches` predate the audit-chain model).
 
 Pending later-phase ports (read v1 first): PostGIS/apiary models, per-stage `*_records`
 models and canonical payload helpers, three-way verify logic.
