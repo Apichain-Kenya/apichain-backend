@@ -6,6 +6,27 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+
+class ErrorResponse(BaseModel):
+    """OpenAPI shape of the error envelope, so documented error responses match
+    what the handler emits (keeps the Schemathesis contract test honest)."""
+
+    code: str
+    message: str
+    details: dict[str, Any] | None = None
+
+
+def error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
+    """Build a FastAPI `responses=` map documenting the error envelope for each
+    given status code. Always documents 400 (Starlette returns it with a plain
+    {detail} body for an unparseable request body) as description-only, so its
+    shape is not validated against the envelope."""
+    responses: dict[int | str, dict[str, Any]] = {400: {"description": "Malformed request body"}}
+    for code in status_codes:
+        responses[code] = {"model": ErrorResponse}
+    return responses
 
 
 class APIError(Exception):

@@ -12,12 +12,16 @@ import uuid
 import psycopg
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 import app.config
 from alembic import command
+
+# Spine tables (child-first) for truncate cleanup between endpoint tests.
+_ALL_TABLES = "audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
 
 
 @pytest.fixture(scope="session")
@@ -61,3 +65,28 @@ def db(migrated_engine):
         session.close()
         trans.rollback()
         conn.close()
+
+
+@pytest.fixture
+def client(migrated_engine):
+    """TestClient with get_db bound to the migrated DB (endpoints commit for
+    real); all spine tables are truncated after each test for isolation."""
+    from app.database import get_db
+    from app.main import app
+
+    testing_session = sessionmaker(bind=migrated_engine, autoflush=False, autocommit=False)
+
+    def _override_get_db():
+        s = testing_session()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+        with migrated_engine.begin() as conn:
+            conn.execute(text(f"truncate table {_ALL_TABLES} restart identity cascade"))
