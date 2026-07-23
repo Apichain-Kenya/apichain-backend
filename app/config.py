@@ -10,7 +10,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://apichain:apichain@localhost:5433/apichain"
+    # Dev DB name is `apichain_v2`, distinct from the v1 `apichain` DB that also
+    # lives on :5433 locally — so a stray local run fails fast instead of
+    # silently reading/writing v1 data. Compose creates this DB in its own volume.
+    database_url: str = "postgresql+psycopg://apichain:apichain@localhost:5433/apichain_v2"
     frontend_origins: str = "http://localhost:5173"
 
     # Auth (Phase 1). Real secret comes from the environment; this default is
