@@ -16,7 +16,9 @@ from sqlalchemy.orm import sessionmaker
 from app.database import get_db
 from app.main import app
 
-_ALL_TABLES = "audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
+_ALL_TABLES = (
+    "merkle_anchor, audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
+)
 
 schema = schemathesis.openapi.from_asgi("/openapi.json", app)
 
