@@ -243,6 +243,7 @@
       "LoginRequest": {
         "properties": {
           "identifier": {
+            "pattern": "^[^\\x00]*$",
             "title": "Identifier",
             "type": "string"
           },

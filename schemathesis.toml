@@ -1,0 +1,23 @@
+# Schemathesis contract-test configuration (05 §6.2 guardrail 3).
+#
+# Only one narrow exemption, and it is a schema-expressiveness limit rather
+# than an app defect: bcrypt refuses a password longer than 72 **bytes**, so
+# both password-taking operations validate the UTF-8 byte length and return a
+# documented 422. JSON Schema can only bound a string in **characters**, so a
+# 72-character password of combining marks is schema-compliant yet >72 bytes,
+# and `positive_data_acceptance` reports the resulting 422 as "valid data was
+# rejected". The constraint cannot be expressed in the schema, so it is
+# declared here instead. The check stays fully active everywhere else, and
+# every other check stays active on these two operations.
+
+[[operations]]
+include-name = "POST /v2/auth/login"
+
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", "401", "403", "404", "409", "422", "5xx"]
+
+[[operations]]
+include-name = "POST /v2/farmers"
+
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", "401", "403", "404", "409", "422", "5xx"]

@@ -131,3 +131,11 @@ def test_login_with_wrong_password_is_401(client, migrated_engine):
     res = client.post("/v2/auth/login", json={"identifier": "+254700000007", "password": "nope"})
     assert res.status_code == 401
     assert res.json()["code"] == "invalid_credentials"
+
+
+def test_login_rejects_a_nul_byte_identifier_as_invalid_input(client):
+    # PostgreSQL text cannot store U+0000. The schema declares it, so this is a
+    # 422 (invalid input) rather than a 400 surfacing from the driver — which
+    # would read as "the server rejected valid data" to any contract checker.
+    r = client.post("/v2/auth/login", json={"identifier": "ian\x00", "password": "x"})
+    assert r.status_code == 422
