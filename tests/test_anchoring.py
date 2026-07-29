@@ -192,3 +192,76 @@ def test_the_root_is_not_a_bare_hash_of_the_row_hash(db):
 
     assert anchor is not None
     assert anchor.merkle_root != hashlib.sha256(row.row_hash).digest()
+
+
+# --- the upgrade job: pending -> Bitcoin-confirmed (P2-F, 09 §9) -----------
+
+
+def _pending_anchor(db, calendar):
+    _append(db, 0)
+    anchor = anchoring.stamp_with_session(db, calendars=[calendar])
+    assert anchor is not None and anchor.verified_at is None
+    return anchor
+
+
+def test_a_pending_anchor_is_left_untouched_while_bitcoin_has_not_confirmed(db):
+    calendar = FakeCalendar()
+    anchor = _pending_anchor(db, calendar)
+    proof_before = anchor.anchor_proof
+
+    assert anchoring.upgrade_pending_with_session(db, calendars=[calendar]) == 0
+
+    assert anchor.verified_at is None
+    assert anchor.anchor_proof == proof_before
+
+
+def test_an_anchor_becomes_confirmed_once_the_calendar_attests_it(db):
+    from app.services import ots
+
+    calendar = FakeCalendar()
+    anchor = _pending_anchor(db, calendar)
+    root = anchor.merkle_root
+
+    calendar.confirm_at_height = 903_120
+    assert anchoring.upgrade_pending_with_session(db, calendars=[calendar]) == 1
+
+    assert anchor.verified_at is not None
+    assert ots.is_confirmed(anchor.anchor_proof) is True
+    assert ots.bitcoin_block_heights(anchor.anchor_proof) == [903_120]
+    # The upgraded proof must still commit to the same root, or the anchor row
+    # and its proof would no longer describe the same thing.
+    assert ots.message(anchor.anchor_proof) == root
+
+
+def test_a_confirmed_anchor_is_never_re_fetched(db):
+    calendar = FakeCalendar(confirm_at_height=903_120)
+    _pending_anchor(db, calendar)
+    anchoring.upgrade_pending_with_session(db, calendars=[calendar])
+    calls = len(calendar.get_timestamp_calls)
+
+    assert anchoring.upgrade_pending_with_session(db, calendars=[calendar]) == 0
+    assert len(calendar.get_timestamp_calls) == calls
+
+
+def test_one_unupgradable_anchor_does_not_block_the_others(db):
+    calendar = FakeCalendar(confirm_at_height=903_120)
+    broken = _pending_anchor(db, calendar)
+    broken.anchor_proof = b"corrupt-not-an-ots-file"
+    db.flush()
+
+    _append(db, 1)
+    healthy = anchoring.stamp_with_session(db, calendars=[calendar])
+    assert healthy is not None
+
+    assert anchoring.upgrade_pending_with_session(db, calendars=[calendar]) == 1
+    assert healthy.verified_at is not None
+    assert broken.verified_at is None
+
+
+def test_a_calendar_outage_during_upgrade_leaves_everything_pending(db):
+    calendar = FakeCalendar()
+    anchor = _pending_anchor(db, calendar)
+
+    calendar.down = True
+    assert anchoring.upgrade_pending_with_session(db, calendars=[calendar]) == 0
+    assert anchor.verified_at is None

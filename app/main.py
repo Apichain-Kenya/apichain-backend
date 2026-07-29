@@ -37,6 +37,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 seconds=settings.anchor_interval_seconds,
                 id="anchor_stamp",
             )
+            # Separate job on a slower interval: Bitcoin confirmation takes
+            # hours, so polling the calendars faster than that is pure waste.
+            scheduler.add_job(
+                lambda: anchoring.run_upgrade(SessionLocal),
+                "interval",
+                seconds=settings.anchor_upgrade_interval_seconds,
+                id="anchor_upgrade",
+            )
         scheduler.start()
         logger.info(
             "scheduler started (anchoring %s)",

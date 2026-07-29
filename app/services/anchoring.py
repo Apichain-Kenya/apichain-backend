@@ -157,3 +157,73 @@ def run_stamp(
         if anchor is not None:
             db.commit()
         return anchor
+
+
+# --- the upgrade job: pending -> Bitcoin-confirmed (P2-F, 09 §9) -----------
+
+# One tick's worth of work. Bitcoin confirms in hours, so the pending backlog
+# is small in practice; the bound just stops a long outage from turning one
+# tick into an unbounded run of calendar calls.
+_UPGRADE_BATCH = 100
+
+
+def _pending_anchors(db: Session) -> list[MerkleAnchor]:
+    return list(
+        db.execute(
+            select(MerkleAnchor)
+            .where(MerkleAnchor.verified_at.is_(None))
+            .order_by(MerkleAnchor.anchored_at.asc())
+            .limit(_UPGRADE_BATCH)
+        ).scalars()
+    )
+
+
+def upgrade_anchor(
+    db: Session, anchor: MerkleAnchor, *, calendars: Sequence[ots.Calendar] | None = None
+) -> bool:
+    """Attach a Bitcoin attestation to one anchor if there is one to attach.
+
+    False means "still pending", which is the expected answer for hours after
+    stamping. Does not commit.
+    """
+    try:
+        upgraded = ots.upgrade(anchor.anchor_proof, calendars=calendars)
+    except ots.InvalidProof:
+        # A blob we cannot parse will never upgrade. Log it and leave the row
+        # alone rather than failing the whole batch around it.
+        logger.error("anchor %s has an unparseable proof", anchor.id)
+        return False
+    if upgraded is None:
+        return False
+
+    anchor.anchor_proof = upgraded
+    anchor.verified_at = datetime.now(UTC).replace(tzinfo=None)
+    db.flush()
+    logger.info(
+        "anchor %s confirmed in Bitcoin block(s) %s",
+        anchor.id,
+        ots.bitcoin_block_heights(upgraded),
+    )
+    return True
+
+
+def upgrade_pending_with_session(
+    db: Session, *, calendars: Sequence[ots.Calendar] | None = None
+) -> int:
+    """Try to confirm every pending anchor. Returns how many were confirmed.
+    Does not commit."""
+    return sum(upgrade_anchor(db, anchor, calendars=calendars) for anchor in _pending_anchors(db))
+
+
+def run_upgrade(
+    session_factory: sessionmaker, *, calendars: Sequence[ots.Calendar] | None = None
+) -> int:
+    """Scheduler entry point. Commits per anchor, so one anchor that cannot be
+    upgraded never rolls back the ones that could."""
+    confirmed = 0
+    with session_factory() as db:
+        for anchor in _pending_anchors(db):
+            if upgrade_anchor(db, anchor, calendars=calendars):
+                db.commit()
+                confirmed += 1
+    return confirmed
