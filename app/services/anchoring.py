@@ -39,6 +39,9 @@ class AnchorStatus:
     anchor_ok: bool = True
     last_run_at: datetime | None = None
     last_anchor_id: int | None = None
+    # The audit id a run is blocked on, if any. Without this the health surface
+    # would report a clean bill of health while nothing was being anchored.
+    waiting_on_audit_id: int | None = None
     last_error: str | None = None
 
 
@@ -77,6 +80,49 @@ def contiguous_run(available_ids: Sequence[int], *, start: int, max_rows: int) -
     return run
 
 
+def _resolve_gap_at_start(start: int, candidates: list[tuple[int, datetime]]) -> int | None:
+    """Decide what to do when the next id we owe an anchor is missing.
+
+    A gap is ambiguous: the id may belong to a transaction still in flight, or
+    it may be **burned**. PostgreSQL sequences are not transactional, so
+    `append()`'s flush consumes an id immediately and a later rollback — a 500
+    mid-request, or the known concurrent-idempotency-key race — leaves that id
+    permanently absent.
+
+    Waiting unconditionally would turn a one-row problem into a total one:
+    anchoring would stop forever and every later record would stay unanchored.
+    So we wait only while the gap could still be in flight. Once the oldest
+    committed row above it is older than two anchor intervals, any transaction
+    that held the id has long since committed or rolled back, and we skip.
+
+    The skip is never silent: it is logged loudly, and the next anchor's range
+    visibly does not continue the previous one, so lost coverage cannot be
+    mistaken for coverage by anything reading `merkle_anchor`.
+    """
+    first_id, first_created_at = candidates[0]
+    if first_id == start:
+        _status.waiting_on_audit_id = None
+        return start
+
+    grace = 2 * settings.anchor_interval_seconds
+    age = (datetime.now(UTC).replace(tzinfo=None) - first_created_at).total_seconds()
+    if age < grace:
+        # Probably still committing. Come back next tick.
+        _status.waiting_on_audit_id = start
+        logger.info("waiting for audit id %s to commit before anchoring", start)
+        return None
+
+    logger.warning(
+        "audit id(s) %s-%s never committed (rolled back); skipping to %s. "
+        "Anchor coverage has a permanent hole there.",
+        start,
+        first_id - 1,
+        first_id,
+    )
+    _status.waiting_on_audit_id = None
+    return first_id
+
+
 def _next_start(db: Session) -> int | None:
     """The first audit id this run owes an anchor, or None if there are none."""
     last_anchored = db.execute(select(func.max(MerkleAnchor.to_audit_id))).scalar_one_or_none()
@@ -98,15 +144,26 @@ def stamp_with_session(
     if start is None:
         return None
 
-    candidates = list(
-        db.execute(
-            select(AuditLog.id)
+    candidates: list[tuple[int, datetime]] = [
+        (audit_id, created_at)
+        for audit_id, created_at in db.execute(
+            select(AuditLog.id, AuditLog.created_at)
             .where(AuditLog.id >= start)
             .order_by(AuditLog.id.asc())
             .limit(settings.anchor_max_rows)
-        ).scalars()
+        ).all()
+    ]
+    if not candidates:
+        _status.waiting_on_audit_id = None
+        return None
+
+    start = _resolve_gap_at_start(start, candidates)
+    if start is None:
+        return None
+
+    run = contiguous_run(
+        [audit_id for audit_id, _ in candidates], start=start, max_rows=settings.anchor_max_rows
     )
-    run = contiguous_run(candidates, start=start, max_rows=settings.anchor_max_rows)
     if not run:
         return None
 
@@ -150,13 +207,19 @@ def stamp_with_session(
 
 def run_stamp(
     session_factory: sessionmaker, *, calendars: Sequence[ots.Calendar] | None = None
-) -> MerkleAnchor | None:
-    """Scheduler entry point: own the session and the transaction."""
+) -> int | None:
+    """Scheduler entry point: own the session and the transaction.
+
+    Returns the new anchor's id, not the ORM object — the session closes here,
+    and handing back a detached instance whose attributes raise on access is a
+    trap for every caller.
+    """
     with session_factory() as db:
         anchor = stamp_with_session(db, calendars=calendars)
-        if anchor is not None:
-            db.commit()
-        return anchor
+        if anchor is None:
+            return None
+        db.commit()
+        return anchor.id
 
 
 # --- the upgrade job: pending -> Bitcoin-confirmed (P2-F, 09 §9) -----------

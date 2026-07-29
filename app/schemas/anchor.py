@@ -55,6 +55,9 @@ class AnchorHealthResponse(BaseModel):
     last_run_at: datetime | None = None
     last_anchor_id: int | None = None
     last_anchored_audit_id: int | None = None
+    # Set when a run is blocked on an audit id that has not appeared yet, so a
+    # stalled worker cannot look healthy.
+    waiting_on_audit_id: int | None = None
     pending_rows: int
     oldest_unanchored_at: datetime | None = None
     pending_anchors: int

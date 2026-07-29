@@ -61,6 +61,7 @@ def anchor_health(db: Session = Depends(get_db)) -> AnchorHealthResponse:
         last_run_at=status.last_run_at,
         last_anchor_id=status.last_anchor_id,
         last_anchored_audit_id=last_anchored,
+        waiting_on_audit_id=status.waiting_on_audit_id,
         pending_rows=pending_rows,
         oldest_unanchored_at=(
             oldest_unanchored.replace(tzinfo=UTC) if oldest_unanchored is not None else None

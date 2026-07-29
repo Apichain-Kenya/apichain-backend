@@ -72,6 +72,17 @@
           "pending_rows": {
             "title": "Pending Rows",
             "type": "integer"
+          },
+          "waiting_on_audit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting On Audit Id"
           }
         },
         "required": [
