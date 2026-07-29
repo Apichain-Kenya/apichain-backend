@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.errors import APIError, api_error_handler, data_error_handler
 from app.routers import v2_router
-from app.services import integrity
+from app.services import anchoring, integrity
 
 logger = logging.getLogger("apichain")
 
@@ -27,8 +27,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             seconds=settings.integrity_check_interval_seconds,
             id="audit_integrity",
         )
+        if settings.anchor_enabled:
+            # Anchoring has its own switch on top of the scheduler one, so a
+            # box with no outbound network can keep checking chain integrity
+            # without failing an anchor run every tick (P2-E).
+            scheduler.add_job(
+                lambda: anchoring.run_stamp(SessionLocal),
+                "interval",
+                seconds=settings.anchor_interval_seconds,
+                id="anchor_stamp",
+            )
         scheduler.start()
-        logger.info("audit integrity scheduler started")
+        logger.info(
+            "scheduler started (anchoring %s)",
+            "enabled" if settings.anchor_enabled else "disabled",
+        )
     try:
         yield
     finally:
