@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
@@ -30,6 +30,37 @@ from app.models import AuditLog, MerkleAnchor
 from app.services import merkle, ots
 
 logger = logging.getLogger("apichain.anchoring")
+
+# Advisory-lock keys. **Deliberately distinct from `audit_log.append`'s chain
+# key**: sharing it would make every anchor run block every state-changing
+# request in the system for as long as a calendar submission takes.
+#
+# Both are `try` locks. A periodic job that cannot get the lock should skip its
+# tick — blocking would queue ticks up behind a holder that is doing network
+# I/O, holding a connection the whole time. Skipping loses nothing: the range
+# is still there next tick.
+_STAMP_LOCK_KEY = 4155_4955
+# Two-part key, so replicas can upgrade *different* anchors concurrently.
+_UPGRADE_LOCK_NAMESPACE = 4155_4956
+
+
+def try_stamp_lock(db: Session) -> bool:
+    """Claim the right to anchor in this transaction. False = someone else is."""
+    return bool(
+        db.execute(
+            text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": _STAMP_LOCK_KEY}
+        ).scalar_one()
+    )
+
+
+def try_upgrade_lock(db: Session, anchor_id: int) -> bool:
+    """Claim one anchor's upgrade in this transaction."""
+    return bool(
+        db.execute(
+            text("SELECT pg_try_advisory_xact_lock(:ns, :id)"),
+            {"ns": _UPGRADE_LOCK_NAMESPACE, "id": anchor_id},
+        ).scalar_one()
+    )
 
 
 @dataclass
@@ -139,6 +170,13 @@ def stamp_with_session(
     was nothing to anchor or no calendar accepted the root. Does not commit.
     """
     _status.last_run_at = datetime.now(UTC)
+
+    if not try_stamp_lock(db):
+        # Another replica is mid-run. Normal operation in a multi-replica
+        # deployment, so it must NOT flip anchor_ok or set last_error — Phase
+        # 5's alarms would fire on a perfectly healthy cluster.
+        logger.debug("another replica holds the anchor lock; skipping this tick")
+        return None
 
     start = _next_start(db)
     if start is None:
@@ -281,11 +319,27 @@ def upgrade_pending_with_session(
 def run_upgrade(
     session_factory: sessionmaker, *, calendars: Sequence[ots.Calendar] | None = None
 ) -> int:
-    """Scheduler entry point. Commits per anchor, so one anchor that cannot be
-    upgraded never rolls back the ones that could."""
-    confirmed = 0
+    """Scheduler entry point.
+
+    One session (and so one transaction, and one advisory lock) per anchor, so
+    that a replica which cannot claim an anchor skips just that one rather than
+    the whole tick, and one anchor that fails to upgrade never rolls back the
+    ones that succeeded.
+    """
     with session_factory() as db:
-        for anchor in _pending_anchors(db):
+        pending_ids = [anchor.id for anchor in _pending_anchors(db)]
+
+    confirmed = 0
+    for anchor_id in pending_ids:
+        with session_factory() as db:
+            if not try_upgrade_lock(db, anchor_id):
+                logger.debug("anchor %s is being upgraded elsewhere; skipping", anchor_id)
+                continue
+            anchor = db.get(MerkleAnchor, anchor_id)
+            # Re-check under the lock: another replica may have confirmed it
+            # between our listing and our claim.
+            if anchor is None or anchor.verified_at is not None:
+                continue
             if upgrade_anchor(db, anchor, calendars=calendars):
                 db.commit()
                 confirmed += 1
