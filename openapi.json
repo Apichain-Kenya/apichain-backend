@@ -1,6 +1,248 @@
 {
   "components": {
     "schemas": {
+      "AnchorHealthResponse": {
+        "description": "Anchor lag, for the uptime check and the Phase 5 alarms (05 \u00a73.6).",
+        "properties": {
+          "anchor_ok": {
+            "title": "Anchor Ok",
+            "type": "boolean"
+          },
+          "last_anchor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Anchor Id"
+          },
+          "last_anchored_audit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Anchored Audit Id"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "oldest_unanchored_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Unanchored At"
+          },
+          "pending_anchors": {
+            "title": "Pending Anchors",
+            "type": "integer"
+          },
+          "pending_rows": {
+            "title": "Pending Rows",
+            "type": "integer"
+          },
+          "waiting_on_audit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting On Audit Id"
+          }
+        },
+        "required": [
+          "anchor_ok",
+          "pending_rows",
+          "pending_anchors"
+        ],
+        "title": "AnchorHealthResponse",
+        "type": "object"
+      },
+      "AnchorProofEntry": {
+        "description": "One audit row of this batch, and the proof for it if one exists yet.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "anchor_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnchorTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "anchored_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchored At"
+          },
+          "audit_id": {
+            "title": "Audit Id",
+            "type": "integer"
+          },
+          "merkle_path": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProofStepOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merkle Path"
+          },
+          "merkle_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merkle Root"
+          },
+          "ots_proof": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ots Proof"
+          },
+          "row_hash": {
+            "title": "Row Hash",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "anchored",
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          }
+        },
+        "required": [
+          "audit_id",
+          "action",
+          "row_hash",
+          "status"
+        ],
+        "title": "AnchorProofEntry",
+        "type": "object"
+      },
+      "AnchorProofResponse": {
+        "properties": {
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AnchorProofEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "partial",
+              "anchored",
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "batch_code",
+          "status",
+          "entries"
+        ],
+        "title": "AnchorProofResponse",
+        "type": "object"
+      },
+      "AnchorTarget": {
+        "description": "Where a Merkle root is published (04 \u00a75.2).\n\nThe target is settled: OpenTimestamps to Bitcoin (05 \u00a76.3). `polygon` is a\nreserved fallback (06 \u00a79) \u2014 the value exists so switching would not need a\nmigration; no code path in v2 consumes it.",
+        "enum": [
+          "opentimestamps",
+          "polygon"
+        ],
+        "title": "AnchorTarget",
+        "type": "string"
+      },
       "AuditHealthResponse": {
         "properties": {
           "chain_ok": {
@@ -243,6 +485,7 @@
       "LoginRequest": {
         "properties": {
           "identifier": {
+            "pattern": "^[^\\x00]*$",
             "title": "Identifier",
             "type": "string"
           },
@@ -289,6 +532,29 @@
           "version"
         ],
         "title": "PingResponse",
+        "type": "object"
+      },
+      "ProofStepOut": {
+        "description": "One sibling on the path to the root; `position` is the sibling's side.",
+        "properties": {
+          "position": {
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Position",
+            "type": "string"
+          },
+          "sibling": {
+            "title": "Sibling",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sibling",
+          "position"
+        ],
+        "title": "ProofStepOut",
         "type": "object"
       },
       "RefreshRequest": {
@@ -413,6 +679,28 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/v2/audit/anchor-health": {
+      "get": {
+        "description": "Anchor lag: how far the public witness trails the log (05 \u00a73.6).\n\nA separate endpoint rather than extra fields on /audit/health, so the\nPhase 1 contract does not move. Phase 5's alarms read these fields.",
+        "operationId": "anchor_health_v2_audit_anchor_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Anchor Health",
+        "tags": [
+          "audit"
+        ]
       }
     },
     "/v2/audit/health": {
@@ -690,6 +978,64 @@
           }
         ],
         "summary": "Create Batch",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/anchor-proof": {
+      "get": {
+        "description": "Public: everything needed to verify this batch's records offline.\n\nUnauthenticated by design \u2014 the consumer scanning a jar is not a user\n(04 \u00a75.3). One entry per audit row, each carrying its own status, so a\nrecord that exists in our log but has no public anchor yet is reported as\n`pending` rather than as a missing field (03 \u00a76).",
+        "operationId": "batch_anchor_proof_v2_batches__batch_id__anchor_proof_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorProofResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch Anchor Proof",
         "tags": [
           "batches"
         ]

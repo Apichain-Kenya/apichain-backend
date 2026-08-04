@@ -1,4 +1,7 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.enums import AnchorTarget
 
 
 class Settings(BaseSettings):
@@ -28,6 +31,32 @@ class Settings(BaseSettings):
     # Audit-chain integrity check (P1-G). The scheduler is disabled in tests.
     scheduler_enabled: bool = True
     integrity_check_interval_seconds: int = 300
+
+    # Anchoring (P2-A, 09 §4). `anchor_enabled` is a second switch on top of
+    # `scheduler_enabled` so anchoring can be off in a dev or staging box that
+    # has no outbound network while the integrity job keeps running.
+    anchor_enabled: bool = True
+    anchor_target: AnchorTarget = AnchorTarget.opentimestamps
+    anchor_interval_seconds: int = 300  # dev; ~3600 in staging/prod via env
+    # Bitcoin confirmation takes hours (06 §8), so polling for the upgrade
+    # faster than hourly is pure waste.
+    anchor_upgrade_interval_seconds: int = 3600
+    anchor_max_rows: int = 10_000  # bounds one run's tree; the run stays contiguous
+    ots_calendar_urls: str = "https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org"
+    ots_timeout_seconds: int = 10
+
+    @field_validator("ots_calendar_urls")
+    @classmethod
+    def _at_least_one_calendar(cls, value: str) -> str:
+        if not [u.strip() for u in value.split(",") if u.strip()]:
+            raise ValueError("ots_calendar_urls must list at least one calendar URL")
+        return value
+
+    @property
+    def calendar_urls(self) -> list[str]:
+        """The configured calendars. Submitting to several is redundancy, not
+        consensus: one success is enough (09 §7)."""
+        return [u.strip() for u in self.ots_calendar_urls.split(",") if u.strip()]
 
 
 settings = Settings()

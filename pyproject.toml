@@ -10,6 +10,7 @@ dependencies = [
     "eth-hash[pycryptodome]>=0.8.0",
     "fastapi>=0.139.2",
     "geoalchemy2>=0.20.0",
+    "opentimestamps>=0.4.5",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.10",

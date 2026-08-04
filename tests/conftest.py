@@ -21,7 +21,9 @@ import app.config
 from alembic import command
 
 # Spine tables (child-first) for truncate cleanup between endpoint tests.
-_ALL_TABLES = "audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
+_ALL_TABLES = (
+    "merkle_anchor, audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
+)
 
 
 @pytest.fixture(autouse=True, scope="session")

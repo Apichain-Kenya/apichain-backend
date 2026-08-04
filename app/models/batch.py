@@ -17,7 +17,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-from app.models.enums import BatchState
+from app.enums import BatchState
 
 
 class HoneyBatch(Base):

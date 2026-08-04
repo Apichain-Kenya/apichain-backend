@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-from app.models.enums import ConsentPurpose, GrantedVia
+from app.enums import ConsentPurpose, GrantedVia
 
 
 class AuditLog(Base):

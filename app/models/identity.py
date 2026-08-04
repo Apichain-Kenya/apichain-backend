@@ -17,7 +17,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, fun
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-from app.models.enums import Role
+from app.enums import Role
 
 
 class User(Base):
