@@ -156,3 +156,83 @@ def test_the_verifier_needs_neither_the_web_framework_nor_the_database():
     source = SCRIPT.read_text(encoding="utf-8")
     for forbidden in ("fastapi", "sqlalchemy", "app.database", "app.models", "requests"):
         assert forbidden not in source, f"the offline verifier must not depend on {forbidden}"
+
+
+# --- the --block-merkle-root comparison (regression) -----------------------
+#
+# An OTS attestation does not sit on our Merkle root: the calendar applies more
+# operations, and the Bitcoin attestation lands on the derived commitment at
+# the end of that path. That derived value is what equals the block header's
+# merkle root (the library's own verify_against_blockheader compares exactly
+# that). Comparing the supplied block root against OUR root instead rejected
+# every genuine block root, and "passed" only when fed our own root — which
+# proves nothing about Bitcoin at all.
+
+
+def _attested_commitment(bundle: Path) -> tuple[str, int]:
+    """The (commitment, height) the proof says Bitcoin attests to."""
+    import base64
+
+    from opentimestamps.core.notary import BitcoinBlockHeaderAttestation
+    from opentimestamps.core.serialize import BytesDeserializationContext
+    from opentimestamps.core.timestamp import DetachedTimestampFile
+
+    entry = json.loads(bundle.read_text(encoding="utf-8"))["entries"][0]
+    detached = DetachedTimestampFile.deserialize(
+        BytesDeserializationContext(base64.b64decode(entry["ots_proof"]))
+    )
+    for msg, att in detached.timestamp.all_attestations():
+        if isinstance(att, BitcoinBlockHeaderAttestation):
+            return msg.hex(), att.height
+    raise AssertionError("proof carries no Bitcoin attestation")
+
+
+def test_the_real_attested_commitment_verifies(client, migrated_engine, tmp_path):
+    batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
+    bundle = _bundle(client, tmp_path, batch_id)
+    commitment, height = _attested_commitment(bundle)
+
+    result = _run(bundle, "--block-merkle-root", commitment)
+
+    assert result.returncode == 0, result.stdout
+    assert f"Bitcoin block {height}" in result.stdout
+
+
+def test_this_batchs_merkle_root_is_not_accepted_as_a_block_root(client, migrated_engine, tmp_path):
+    # The exact false positive the old comparison allowed.
+    batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
+    bundle = _bundle(client, tmp_path, batch_id)
+    our_root = json.loads(bundle.read_text(encoding="utf-8"))["entries"][0]["merkle_root"]
+
+    result = _run(bundle, "--block-merkle-root", our_root)
+
+    assert result.returncode == 1, result.stdout
+    assert "matches no attestation" in result.stdout
+
+
+def test_a_wrong_block_root_is_rejected(client, migrated_engine, tmp_path):
+    batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
+    bundle = _bundle(client, tmp_path, batch_id)
+
+    assert _run(bundle, "--block-merkle-root", "ab" * 32).returncode == 1
+
+
+def test_the_commitment_to_look_up_is_printed(client, migrated_engine, tmp_path):
+    # Without this the user has no way to know what to check in the block.
+    batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
+    bundle = _bundle(client, tmp_path, batch_id)
+    commitment, _ = _attested_commitment(bundle)
+
+    assert commitment in _run(bundle).stdout
+
+
+def test_supplying_a_block_root_for_a_pending_proof_fails_cleanly(
+    client, migrated_engine, tmp_path
+):
+    batch_id = _seed_and_anchor(migrated_engine)  # anchored, not yet confirmed
+    bundle = _bundle(client, tmp_path, batch_id)
+
+    result = _run(bundle, "--block-merkle-root", "ab" * 32)
+
+    assert result.returncode == 1
+    assert "names no Bitcoin block yet" in result.stdout

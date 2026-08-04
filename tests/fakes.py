@@ -7,6 +7,8 @@ normal case for hours), one that has been confirmed, or one that is simply
 down.
 """
 
+import time
+
 from opentimestamps.core.notary import (
     BitcoinBlockHeaderAttestation,
     PendingAttestation,
@@ -34,16 +36,24 @@ class FakeCalendar:
         *,
         down: bool = False,
         confirm_at_height: int | None = None,
+        submit_delay: float = 0.0,
     ) -> None:
         self.url = url
         self.down = down
         self.confirm_at_height = confirm_at_height
+        # A real calendar submission is a network round-trip. That latency IS
+        # the race window between two replicas, so a concurrency test needs to
+        # be able to reproduce it; with a zero-latency fake the window is too
+        # narrow to collide and the test passes whether the lock exists or not.
+        self.submit_delay = submit_delay
         self.submitted: list[bytes] = []
         self.get_timestamp_calls: list[bytes] = []
 
     def submit(self, digest: bytes, timeout: float | None = None) -> Timestamp:
         if self.down:
             raise CalendarDown(f"{self.url} is unreachable")
+        if self.submit_delay:
+            time.sleep(self.submit_delay)
         self.submitted.append(digest)
         timestamp = Timestamp(digest)
         # A real calendar aggregates the digest with other submissions before

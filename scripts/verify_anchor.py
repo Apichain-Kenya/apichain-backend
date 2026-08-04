@@ -19,10 +19,17 @@ it:
 Those three are the substance: they prove this record is in the tree whose root
 was published, and that the published root is the one in front of you. Step 4
 reports what the proof itself asserts (a pending calendar, or a Bitcoin block
-height). Only step 5 — confirming that block really contains the root — needs a
-Bitcoin block header, which you supply with `--block-merkle-root` from any
-source you trust: your own node, a block explorer, a friend. There is no
-Bitcoin node here and none in CI.
+height plus the commitment that block must contain). Only step 5 — confirming
+the block really contains it — needs a Bitcoin block header, which you supply
+with `--block-merkle-root` from any source you trust: your own node, a block
+explorer, a friend. There is no Bitcoin node here and none in CI.
+
+Note what `--block-merkle-root` is compared against. The attested commitment is
+**not** this batch's Merkle root: the calendar applies further operations before
+Bitcoin sees anything, and the attestation lands on the derived value at the end
+of that path. That derived value is what equals the block header's merkle root,
+so it is what the comparison uses. Step 4 prints it, so you know what to look
+for in the block.
 
 Exit codes: 0 every checked entry verified; 1 something did not verify;
 2 nothing to check yet (every record still anchor-pending).
@@ -84,19 +91,28 @@ def _check_entry(entry: dict, block_merkle_root: str | None) -> bool | None:
     print(f"{OK} {label}: .ots proof commits to that exact root")
 
     # 4: report what the proof asserts about the public chain.
-    heights = [
-        a.height
-        for _, a in detached.timestamp.all_attestations()
-        if isinstance(a, BitcoinBlockHeaderAttestation)
+    #
+    # An OTS attestation does NOT sit on our Merkle root. The calendar applies
+    # further operations (append a nonce, hash again, aggregate with other
+    # submissions), and the Bitcoin attestation lands on the *derived*
+    # commitment at the end of that path. The library is explicit about what
+    # that commitment means: "the commitment digest will be the merkleroot of
+    # the blockheader", and its own verify_against_blockheader compares the
+    # attested digest against block_header.hashMerkleRoot. So the value to
+    # check against Bitcoin is the attested message, never `root`.
+    attestations = list(detached.timestamp.all_attestations())
+    bitcoin = [
+        (msg, a.height) for msg, a in attestations if isinstance(a, BitcoinBlockHeaderAttestation)
     ]
-    pending = [
-        a.uri for _, a in detached.timestamp.all_attestations() if isinstance(a, PendingAttestation)
-    ]
-    if heights:
+    pending = [a.uri for _, a in attestations if isinstance(a, PendingAttestation)]
+
+    if bitcoin:
         # A confirmed proof usually still carries the calendar's original
         # pending attestation; once Bitcoin has attested, that is history, not
         # a wait, so it is not reported as one.
-        print(f"{OK} {label}: proof asserts Bitcoin block(s) {heights}")
+        for commitment, height in bitcoin:
+            print(f"{OK} {label}: proof asserts Bitcoin block {height}")
+            print(f"{INFO} {label}:   that block's Merkle root must be {commitment.hex()}")
     elif pending:
         print(f"{INFO} {label}: awaiting Bitcoin via {', '.join(pending)}")
     else:
@@ -105,13 +121,21 @@ def _check_entry(entry: dict, block_merkle_root: str | None) -> bool | None:
 
     # 5: the only step that needs anything from outside this file.
     if block_merkle_root is not None:
-        if block_merkle_root.lower() == root.hex():
-            print(f"{OK} {label}: matches the supplied Bitcoin block Merkle root")
-        else:
-            print(f"{BAD} {label}: does NOT match the supplied Bitcoin block Merkle root")
+        if not bitcoin:
+            print(f"{BAD} {label}: proof names no Bitcoin block yet; nothing to compare")
             return False
-    elif heights:
-        print(f"{INFO} {label}: pass --block-merkle-root to check block {heights[0]} yourself")
+        supplied = block_merkle_root.lower().strip()
+        matched = [h for commitment, h in bitcoin if commitment.hex() == supplied]
+        if matched:
+            print(f"{OK} {label}: matches the Merkle root of Bitcoin block {matched[0]}")
+        else:
+            print(f"{BAD} {label}: supplied block Merkle root matches no attestation in this proof")
+            return False
+    elif bitcoin:
+        print(
+            f"{INFO} {label}: pass --block-merkle-root with block {bitcoin[0][1]}'s "
+            "Merkle root to complete the check"
+        )
     return True
 
 
