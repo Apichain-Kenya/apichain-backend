@@ -26,6 +26,12 @@ ACTION_ROLES: dict[str, set[Role]] = {
     "farmer.enroll": {Role.field_officer, Role.admin},
     "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
+    # A farmer self-registers their own harvest (04 §5.3); the remaining four
+    # transitions are staff actions. Attribution for all of them lives in
+    # audit_log.actor_id/actor_role, which is what makes the single-dashboard
+    # walk safe without losing who actually acted.
+    "batch.harvest_record": {Role.farmer, Role.operator, Role.admin},
+    "batch.process_record": {Role.operator, Role.admin},
 }
 
 

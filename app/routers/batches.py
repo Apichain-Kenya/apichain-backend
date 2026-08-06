@@ -24,13 +24,16 @@ from app.models import (
     BatchMetadata,
     BatchState,
     Farmer,
+    HarvestRecord,
     HoneyBatch,
+    ProcessRecord,
     User,
 )
 from app.routers._context import request_context
 from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
-from app.schemas.batches import BatchCreateRequest, BatchResponse
-from app.services import anchor_proof, audit_log, idempotency, stage_payloads
+from app.schemas.batches import BatchCreateRequest, BatchResponse, StageRecordedResponse
+from app.schemas.stages import HarvestRecordRequest, ProcessRecordRequest
+from app.services import anchor_proof, audit_log, idempotency, stage_payloads, stage_writer
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
 # parameter means an out-of-range id is invalid input (422) instead of
@@ -39,6 +42,8 @@ _MAX_INT4 = 2_147_483_647
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 _require_create = requires("batch.create")
+_require_harvest = requires("batch.harvest_record")
+_require_process = requires("batch.process_record")
 
 
 def _generate_batch_code() -> str:
@@ -165,6 +170,77 @@ def create_batch(
     idempotency.finish(db, idem, status_code=201, body=response.model_dump(mode="json"))
     db.commit()
     return response
+
+
+@router.post(
+    "/{batch_id}/harvest",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_harvest(
+    body: HarvestRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_harvest),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S0 -> S1."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.HARVESTED,
+        action="batch.harvest_recorded",
+        body=body,
+        build_row=lambda bid: HarvestRecord(
+            batch_id=bid,
+            harvest_date=body.harvest_date,
+            quantity_kg=body.quantity_kg,
+            hive_ids=list(body.hive_ids),
+            gps_lat=body.gps_lat,
+            gps_lon=body.gps_lon,
+            notes=body.notes,
+        ),
+        build_payload=stage_payloads.harvest_record,
+    )
+
+
+@router.post(
+    "/{batch_id}/process",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_process(
+    body: ProcessRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_process),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S1 -> S2."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.PROCESSED,
+        action="batch.process_recorded",
+        body=body,
+        build_row=lambda bid: ProcessRecord(
+            batch_id=bid,
+            extraction_method=body.extraction_method,
+            moisture_content=body.moisture_content,
+            handling_notes=body.handling_notes,
+        ),
+        build_payload=stage_payloads.process_record,
+    )
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
