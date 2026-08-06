@@ -23,17 +23,27 @@ from app.models import (
     ApiaryRecord,
     BatchMetadata,
     BatchState,
+    CodexConformance,
     Farmer,
     HarvestRecord,
     HoneyBatch,
+    LabResult,
     ProcessRecord,
     User,
 )
 from app.routers._context import request_context
 from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
 from app.schemas.batches import BatchCreateRequest, BatchResponse, StageRecordedResponse
-from app.schemas.stages import HarvestRecordRequest, ProcessRecordRequest
-from app.services import anchor_proof, audit_log, idempotency, stage_payloads, stage_writer
+from app.schemas.stages import HarvestRecordRequest, LabResultRequest, ProcessRecordRequest
+from app.services import (
+    anchor_proof,
+    audit_log,
+    codex_scoring,
+    idempotency,
+    ownership,
+    stage_payloads,
+    stage_writer,
+)
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
 # parameter means an out-of-range id is invalid input (422) instead of
@@ -44,6 +54,7 @@ router = APIRouter(prefix="/batches", tags=["batches"])
 _require_create = requires("batch.create")
 _require_harvest = requires("batch.harvest_record")
 _require_process = requires("batch.process_record")
+_require_lab = requires("batch.lab_verify")
 
 
 def _generate_batch_code() -> str:
@@ -74,6 +85,8 @@ def create_batch(
         raise APIError(
             404, "farmer_not_found", "Farmer does not exist", {"farmer_id": body.farmer_id}
         )
+    # Role admits farmers here; this says which farmer's batches they may open.
+    ownership.assert_acts_for_farmer(db, actor, farmer.id)
 
     apiary = db.get(ApiaryLocation, body.apiary_id)
     if apiary is None:
@@ -240,6 +253,98 @@ def record_process(
             handling_notes=body.handling_notes,
         ),
         build_payload=stage_payloads.process_record,
+    )
+
+
+def _score_and_record_conformance(db: Session, row: LabResult) -> dict[str, object]:
+    """Evaluate the panel, persist the verdict, and hand it to the audit payload.
+
+    Runs between the `lab_results` flush and the append, which is why it must
+    not be fallible: `codex_scoring.evaluate` is pure (no I/O, no model file),
+    and the only write is one INSERT into a table with no constraint that can
+    surprise us. Anything that could raise here would raise *after* the stage
+    row exists and would risk doing so after the append.
+    """
+    report = codex_scoring.evaluate(
+        codex_scoring.LabMeasurements(
+            moisture_pct=row.moisture_pct,
+            fructose_glucose_g_100g=row.fructose_glucose_g_100g,
+            sucrose_g_100g=row.sucrose_g_100g,
+            hmf_mg_kg=row.hmf_mg_kg,
+            diastase_schade=row.diastase_schade,
+            free_acidity_meq_kg=row.free_acidity_meq_kg,
+        )
+    )
+    # NULL for a parameter the lab did not report — distinct from False.
+    passed = {
+        p.parameter: (None if p.status == "not_measured" else p.status == "pass")
+        for p in report.parameters
+    }
+    db.add(
+        CodexConformance(
+            batch_id=row.batch_id,
+            rule_set_version=report.rule_set_version,
+            verdict=report.verdict,
+            moisture_passed=passed["moisture"],
+            fructose_glucose_passed=passed["fructose_glucose"],
+            sucrose_passed=passed["sucrose"],
+            hmf_passed=passed["hmf"],
+            diastase_passed=passed["diastase"],
+            free_acidity_passed=passed["free_acidity"],
+        )
+    )
+    # Anchor the judgement, not only the numbers. Without this the verdict is
+    # re-derivable but was never publicly witnessed.
+    return {"conformance": codex_scoring.as_payload(report)}
+
+
+@router.post(
+    "/{batch_id}/lab-verify",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_lab_result(
+    body: LabResultRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_lab),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S2 -> S3, and the only transition that produces a judgement.
+
+    A failing verdict does **not** block the transition: `LAB_VERIFIED` means a
+    lab result has been recorded, not that the honey passed. Conflating them
+    would make a failing result unrecordable, which is how bad results go
+    missing. The verdict is anchored and surfaced instead.
+    """
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.LAB_VERIFIED,
+        action="batch.lab_verified",
+        body=body,
+        build_row=lambda bid: LabResult(
+            batch_id=bid,
+            moisture_pct=body.moisture_pct,
+            fructose_glucose_g_100g=body.fructose_glucose_g_100g,
+            sucrose_g_100g=body.sucrose_g_100g,
+            hmf_mg_kg=body.hmf_mg_kg,
+            diastase_schade=body.diastase_schade,
+            free_acidity_meq_kg=body.free_acidity_meq_kg,
+            pollen_density=body.pollen_density,
+            laboratory_name=body.laboratory_name,
+            analyst_name=body.analyst_name,
+            certificate_number=body.certificate_number,
+            notes=body.notes,
+            tested_at=body.tested_at,
+        ),
+        build_payload=stage_payloads.lab_result,
+        extra=_score_and_record_conformance,
     )
 
 

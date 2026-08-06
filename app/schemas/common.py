@@ -46,3 +46,9 @@ Longitude = Annotated[Decimal, Field(ge=Decimal("-180"), le=Decimal("180"), deci
 Measurement = Annotated[
     Decimal, Field(ge=Decimal("0"), le=Decimal("99999999.99"), decimal_places=2)
 ]
+
+# A proportion of the whole. Bounded at 100 because the commonest lab-form
+# mistake is a fraction where a percent was meant, or the reverse — and 02 R9
+# records what happens when a value silently means something other than its
+# field name says.
+Percentage = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("100"), decimal_places=2)]

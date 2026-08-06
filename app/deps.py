@@ -32,6 +32,9 @@ ACTION_ROLES: dict[str, set[Role]] = {
     # walk safe without losing who actually acted.
     "batch.harvest_record": {Role.farmer, Role.operator, Role.admin},
     "batch.process_record": {Role.operator, Role.admin},
+    # No oracle contract to satisfy in v2 (01), so the lab officer signs their
+    # own audit row rather than routing through a shared oracle key (04 §5.3).
+    "batch.lab_verify": {Role.lab_officer, Role.admin},
 }
 
 

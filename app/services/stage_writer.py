@@ -45,7 +45,7 @@ from app.errors import APIError
 from app.models import HoneyBatch, User
 from app.routers._context import request_context
 from app.schemas.batches import StageRecordedResponse
-from app.services import audit_log, idempotency, transitions
+from app.services import audit_log, idempotency, ownership, transitions
 
 
 def record_stage(
@@ -81,6 +81,12 @@ def record_stage(
     ).scalar_one_or_none()
     if batch is None:
         raise APIError(404, "batch_not_found", "Batch does not exist", {"batch_id": batch_id})
+
+    # Role says a farmer may record a harvest; this says whose. Without it any
+    # farmer's token could advance any farmer's batch — the same shape as the
+    # v1 farm-details IDOR (04 P3). No-op for staff, who are scoped to all
+    # batches by design and attributed individually in the audit row.
+    ownership.assert_acts_for_farmer(db, actor, batch.farmer_id)
 
     transitions.assert_transition(batch.state, target)
 

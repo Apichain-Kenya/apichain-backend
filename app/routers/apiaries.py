@@ -9,16 +9,15 @@ unpatched in the deployed v1 system; it is not repeated here.
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import requires
 from app.errors import APIError, error_responses
-from app.models import ApiaryLocation, Farmer, Role, User
+from app.models import ApiaryLocation, Farmer, User
 from app.routers._context import request_context
 from app.schemas.apiaries import ApiaryCreateRequest, ApiaryResponse
-from app.services import audit_log, idempotency
+from app.services import audit_log, idempotency, ownership
 
 router = APIRouter(prefix="/apiaries", tags=["apiaries"])
 _require_create = requires("apiary.create")
@@ -50,16 +49,8 @@ def create_apiary(
         )
 
     # A farmer may only seed their own sites. Field officers and admins enroll
-    # on someone's behalf, so they are not restricted here.
-    if actor.role is Role.farmer:
-        own = db.execute(select(Farmer.id).where(Farmer.user_id == actor.id)).scalar_one_or_none()
-        if own != farmer.id:
-            raise APIError(
-                403,
-                "forbidden",
-                "A farmer may only seed their own apiary",
-                {"farmer_id": body.farmer_id},
-            )
+    # on someone's behalf, so they are not restricted.
+    ownership.assert_acts_for_farmer(db, actor, farmer.id)
 
     apiary = ApiaryLocation(
         farmer_id=farmer.id,

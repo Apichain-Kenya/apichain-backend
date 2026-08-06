@@ -832,6 +832,192 @@
         "title": "HoneyType",
         "type": "string"
       },
+      "LabResultRequest": {
+        "description": "S3. Every measurement names its quantity and its unit.\n\n`02` R9 is why: v1 carried `sucrose_level`, which actually held total\nsugars around 75-80% while the Codex sucrose limit is 5 g/100g, so a scorer\nreading it would have failed every honest batch. Naming the field for what\nit measures is the cheapest possible guard against that class of mistake.\n\nEvery parameter is optional. A lab that reports five of six should be able\nto submit; the scorer marks the sixth `not_measured` and the verdict is\n`INCOMPLETE` rather than a confident pass.",
+        "properties": {
+          "analyst_name": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyst Name"
+          },
+          "certificate_number": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Number"
+          },
+          "diastase_schade": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diastase Schade"
+          },
+          "free_acidity_meq_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Acidity Meq Kg"
+          },
+          "fructose_glucose_g_100g": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fructose Glucose G 100G"
+          },
+          "hmf_mg_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hmf Mg Kg"
+          },
+          "laboratory_name": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Laboratory Name"
+          },
+          "moisture_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moisture Pct"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "pollen_density": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pollen Density"
+          },
+          "sucrose_g_100g": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sucrose G 100G"
+          },
+          "tested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tested At"
+          }
+        },
+        "title": "LabResultRequest",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "identifier": {
@@ -1683,6 +1869,125 @@
           }
         ],
         "summary": "Record Harvest",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/lab-verify": {
+      "post": {
+        "description": "S2 -> S3, and the only transition that produces a judgement.\n\nA failing verdict does **not** block the transition: `LAB_VERIFIED` means a\nlab result has been recorded, not that the honey passed. Conflating them\nwould make a failing result unrecordable, which is how bad results go\nmissing. The verdict is anchored and surfaced instead.",
+        "operationId": "record_lab_result_v2_batches__batch_id__lab_verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabResultRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Lab Result",
         "tags": [
           "batches"
         ]

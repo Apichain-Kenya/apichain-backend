@@ -9,9 +9,16 @@ driver becomes a 422 here, where it is honestly invalid input.
 
 import datetime as dt
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
-from app.schemas.common import Count, Latitude, Longitude, Measurement, SafeStr
+from app.schemas.common import (
+    Count,
+    Latitude,
+    Longitude,
+    Measurement,
+    Percentage,
+    SafeStr,
+)
 
 
 class HarvestRecordRequest(BaseModel):
@@ -32,6 +39,50 @@ class ProcessRecordRequest(BaseModel):
     extraction_method: SafeStr
     moisture_content: Measurement | None = None
     handling_notes: SafeStr | None = None
+
+
+class LabResultRequest(BaseModel):
+    """S3. Every measurement names its quantity and its unit.
+
+    `02` R9 is why: v1 carried `sucrose_level`, which actually held total
+    sugars around 75-80% while the Codex sucrose limit is 5 g/100g, so a scorer
+    reading it would have failed every honest batch. Naming the field for what
+    it measures is the cheapest possible guard against that class of mistake.
+
+    Every parameter is optional. A lab that reports five of six should be able
+    to submit; the scorer marks the sixth `not_measured` and the verdict is
+    `INCOMPLETE` rather than a confident pass.
+    """
+
+    moisture_pct: Percentage | None = None
+    fructose_glucose_g_100g: Percentage | None = None
+    sucrose_g_100g: Percentage | None = None
+    hmf_mg_kg: Measurement | None = None
+    diastase_schade: Measurement | None = None
+    free_acidity_meq_kg: Measurement | None = None
+    pollen_density: Measurement | None = None
+
+    laboratory_name: SafeStr | None = None
+    analyst_name: SafeStr | None = None
+    certificate_number: SafeStr | None = None
+    notes: SafeStr | None = None
+    tested_at: dt.datetime | None = None
+
+    @model_validator(mode="after")
+    def _sugars_are_not_transposed(self) -> "LabResultRequest":
+        """Sucrose <=5 and fructose+glucose >=60 are the two fields a form is
+        most likely to swap, and a swap passes range validation on both. Honey
+        with more sucrose than fructose+glucose does not exist, so this is
+        invalid input rather than a batch that confidently fails."""
+        if (
+            self.sucrose_g_100g is not None
+            and self.fructose_glucose_g_100g is not None
+            and self.sucrose_g_100g > self.fructose_glucose_g_100g
+        ):
+            raise ValueError(
+                "sucrose_g_100g exceeds fructose_glucose_g_100g; the two are likely transposed"
+            )
+        return self
 
 
 class PackagingRecordRequest(BaseModel):
