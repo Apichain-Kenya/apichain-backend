@@ -2,7 +2,14 @@
 is what `alembic/env.py` autogenerates against and what the app imports.
 """
 
-from app.enums import AnchorTarget, BatchState, ConsentPurpose, GrantedVia, Role
+from app.enums import (
+    AnchorTarget,
+    BatchState,
+    ConformanceVerdict,
+    ConsentPurpose,
+    GrantedVia,
+    Role,
+)
 from app.models.anchor import MerkleAnchor
 from app.models.audit import AuditLog, ConsentRecord
 from app.models.auth import IdempotencyKey, RefreshToken
@@ -13,6 +20,7 @@ __all__ = [
     "AnchorTarget",
     "AuditLog",
     "BatchState",
+    "ConformanceVerdict",
     "ConsentPurpose",
     "ConsentRecord",
     "Farmer",

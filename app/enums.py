@@ -53,6 +53,22 @@ class GrantedVia(enum.StrEnum):
     farmer_self = "farmer_self"
 
 
+class ConformanceVerdict(enum.StrEnum):
+    """Overall outcome of the rule-based Codex/KEBS check (02 §4, 04 §5.2).
+
+    Three outcomes, not two: a panel missing a parameter is `INCOMPLETE`, never
+    `PASS`. v1's ML score turned absence into a confident answer, which is the
+    single behaviour this scorer exists to stop.
+
+    Members are uppercase because `pass` is a Python keyword; the stored values
+    match, so the column reads the same as the code.
+    """
+
+    PASS = "PASS"
+    FAIL = "FAIL"
+    INCOMPLETE = "INCOMPLETE"
+
+
 class AnchorTarget(enum.StrEnum):
     """Where a Merkle root is published (04 §5.2).
 
