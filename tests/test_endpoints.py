@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models import Role, User
 from app.services import audit_log as al
 from app.services import security
+from tests.helpers import METADATA, seed_apiary
 
 
 def _seed_user(engine, role: Role, phone: str, password: str = "pw") -> int:
@@ -42,7 +43,10 @@ def _enroll_body(phone: str, granted: bool = True) -> dict:
     }
 
 
-def test_enroll_then_create_batch_chains_two_audit_rows(client, migrated_engine):
+def test_enroll_then_create_batch_chains_the_audit_rows(client, migrated_engine):
+    """P3-E: creating a batch now also seeds an apiary and records the two S0
+    pre-images, so the chain runs enrollment -> apiary -> batch -> apiary
+    snapshot -> metadata. What is being tested is that every row chains."""
     officer = _seed_user(migrated_engine, Role.field_officer, "+254700000001")
     operator = _seed_user(migrated_engine, Role.operator, "+254700000002")
 
@@ -54,8 +58,11 @@ def test_enroll_then_create_batch_chains_two_audit_rows(client, migrated_engine)
     assert r1.status_code == 201, r1.text
     farmer_id = r1.json()["id"]
 
+    apiary_id = seed_apiary(migrated_engine, farmer_id)
     r2 = client.post(
-        "/v2/batches", json={"farmer_id": farmer_id}, headers=_auth(operator, Role.operator)
+        "/v2/batches",
+        json={"farmer_id": farmer_id, "apiary_id": apiary_id, "metadata": METADATA},
+        headers=_auth(operator, Role.operator),
     )
     assert r2.status_code == 201, r2.text
     assert r2.json()["state"] == "CREATED"
@@ -64,8 +71,14 @@ def test_enroll_then_create_batch_chains_two_audit_rows(client, migrated_engine)
         rows = s.execute(
             text("select action, prev_hash, row_hash from audit_log order by id")
         ).all()
-        assert [r.action for r in rows] == ["farmer.enrolled", "batch.created"]
-        assert rows[1].prev_hash == rows[0].row_hash  # the second row chains to the first
+        assert [r.action for r in rows] == [
+            "farmer.enrolled",
+            "batch.created",
+            "batch.apiary_recorded",
+            "batch.metadata_recorded",
+        ]
+        for previous, current in zip(rows, rows[1:], strict=False):
+            assert current.prev_hash == previous.row_hash
         assert al.verify_chain(s).ok
 
 
@@ -96,7 +109,9 @@ def test_operator_may_not_enroll_farmer(client, migrated_engine):
 def test_create_batch_for_unknown_farmer_is_404(client, migrated_engine):
     operator = _seed_user(migrated_engine, Role.operator, "+254700000005")
     res = client.post(
-        "/v2/batches", json={"farmer_id": 9999}, headers=_auth(operator, Role.operator)
+        "/v2/batches",
+        json={"farmer_id": 9999, "apiary_id": 1, "metadata": METADATA},
+        headers=_auth(operator, Role.operator),
     )
     assert res.status_code == 404
     assert res.json()["code"] == "farmer_not_found"

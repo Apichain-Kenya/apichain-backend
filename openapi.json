@@ -243,6 +243,180 @@
         "title": "AnchorTarget",
         "type": "string"
       },
+      "ApiaryCreateRequest": {
+        "properties": {
+          "altitude": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude"
+          },
+          "farmer_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Farmer Id",
+            "type": "integer"
+          },
+          "hive_count": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hive Count"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,6}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,6}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "name": {
+            "pattern": "^[^\\x00]*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "vegetation_type": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vegetation Type"
+          }
+        },
+        "required": [
+          "farmer_id",
+          "name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "ApiaryCreateRequest",
+        "type": "object"
+      },
+      "ApiaryManagementMethod": {
+        "enum": [
+          "organic",
+          "conventional",
+          "regenerative"
+        ],
+        "title": "ApiaryManagementMethod",
+        "type": "string"
+      },
+      "ApiaryResponse": {
+        "properties": {
+          "altitude": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude"
+          },
+          "farmer_id": {
+            "title": "Farmer Id",
+            "type": "integer"
+          },
+          "hive_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hive Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "latitude": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Latitude",
+            "type": "string"
+          },
+          "longitude": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Longitude",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "vegetation_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vegetation Type"
+          }
+        },
+        "required": [
+          "id",
+          "farmer_id",
+          "name",
+          "latitude",
+          "longitude",
+          "altitude",
+          "vegetation_type",
+          "hive_count"
+        ],
+        "title": "ApiaryResponse",
+        "type": "object"
+      },
       "AuditHealthResponse": {
         "properties": {
           "chain_ok": {
@@ -276,6 +450,12 @@
       },
       "BatchCreateRequest": {
         "properties": {
+          "apiary_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Apiary Id",
+            "type": "integer"
+          },
           "batch_code": {
             "anyOf": [
               {
@@ -293,12 +473,73 @@
             "minimum": 1.0,
             "title": "Farmer Id",
             "type": "integer"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/BatchMetadataInput"
           }
         },
         "required": [
-          "farmer_id"
+          "farmer_id",
+          "apiary_id",
+          "metadata"
         ],
         "title": "BatchCreateRequest",
+        "type": "object"
+      },
+      "BatchMetadataInput": {
+        "description": "What the farmer declares about a batch at creation \u2014 the S0 pre-image.\n\n`notes` is carried so `/verify` can show it and is deliberately outside the\ncanonical payload, so fixing a typo cannot invalidate anchored history\n(v1 Sprint 8; see `stage_payloads.batch_metadata`).",
+        "properties": {
+          "apiary_management_method": {
+            "$ref": "#/components/schemas/ApiaryManagementMethod"
+          },
+          "expected_yield_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Expected Yield Kg"
+          },
+          "harvest_window_end": {
+            "format": "date",
+            "title": "Harvest Window End",
+            "type": "string"
+          },
+          "harvest_window_start": {
+            "format": "date",
+            "title": "Harvest Window Start",
+            "type": "string"
+          },
+          "honey_type": {
+            "$ref": "#/components/schemas/HoneyType"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "honey_type",
+          "expected_yield_kg",
+          "harvest_window_start",
+          "harvest_window_end",
+          "apiary_management_method"
+        ],
+        "title": "BatchMetadataInput",
         "type": "object"
       },
       "BatchResponse": {
@@ -493,6 +734,18 @@
         },
         "title": "HTTPValidationError",
         "type": "object"
+      },
+      "HoneyType": {
+        "description": "Validated here rather than as a PostgreSQL enum, so amending the list is\na one-file edit instead of an `ALTER TYPE` migration (v1 Sprint 8).",
+        "enum": [
+          "acacia",
+          "wildflower",
+          "eucalyptus",
+          "sunflower",
+          "mixed"
+        ],
+        "title": "HoneyType",
+        "type": "string"
       },
       "LoginRequest": {
         "properties": {
@@ -694,6 +947,103 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/v2/apiaries": {
+      "post": {
+        "operationId": "create_apiary_v2_apiaries_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiaryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Apiary",
+        "tags": [
+          "apiaries"
+        ]
       }
     },
     "/v2/audit/anchor-health": {

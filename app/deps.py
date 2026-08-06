@@ -24,6 +24,7 @@ _bearer = HTTPBearer(auto_error=False)
 # The complete action -> allowed-roles map. Grows one line per new action.
 ACTION_ROLES: dict[str, set[Role]] = {
     "farmer.enroll": {Role.field_officer, Role.admin},
+    "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
 }
 

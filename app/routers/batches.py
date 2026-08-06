@@ -18,11 +18,19 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import requires
 from app.errors import APIError, error_responses
-from app.models import BatchState, Farmer, HoneyBatch, User
+from app.models import (
+    ApiaryLocation,
+    ApiaryRecord,
+    BatchMetadata,
+    BatchState,
+    Farmer,
+    HoneyBatch,
+    User,
+)
 from app.routers._context import request_context
 from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
 from app.schemas.batches import BatchCreateRequest, BatchResponse
-from app.services import anchor_proof, audit_log, idempotency
+from app.services import anchor_proof, audit_log, idempotency, stage_payloads
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
 # parameter means an out-of-range id is invalid input (422) instead of
@@ -62,6 +70,20 @@ def create_batch(
             404, "farmer_not_found", "Farmer does not exist", {"farmer_id": body.farmer_id}
         )
 
+    apiary = db.get(ApiaryLocation, body.apiary_id)
+    if apiary is None:
+        raise APIError(
+            404, "apiary_not_found", "Apiary does not exist", {"apiary_id": body.apiary_id}
+        )
+    if apiary.farmer_id != farmer.id:
+        # The provenance claim would otherwise point at someone else's hives.
+        raise APIError(
+            409,
+            "apiary_farmer_mismatch",
+            "Apiary belongs to a different farmer",
+            {"apiary_id": apiary.id, "farmer_id": farmer.id},
+        )
+
     batch = HoneyBatch(
         farmer_id=farmer.id,
         batch_code=body.batch_code or _generate_batch_code(),
@@ -74,6 +96,35 @@ def create_batch(
         db.rollback()
         raise APIError(409, "batch_code_taken", "batch_code already exists") from exc
 
+    # The two S0 pre-images. `apiary_records` snapshots rather than referencing,
+    # so editing the apiary later cannot invalidate this batch's anchored hash
+    # (v1 Sprint 6).
+    apiary_record = ApiaryRecord(
+        batch_id=batch.id,
+        apiary_id=apiary.id,
+        latitude=apiary.latitude,
+        longitude=apiary.longitude,
+        altitude=apiary.altitude,
+        vegetation_type=apiary.vegetation_type,
+        hive_count=apiary.hive_count,
+    )
+    metadata_record = BatchMetadata(
+        batch_id=batch.id,
+        honey_type=body.metadata.honey_type,
+        expected_yield_kg=body.metadata.expected_yield_kg,
+        harvest_window_start=body.metadata.harvest_window_start,
+        harvest_window_end=body.metadata.harvest_window_end,
+        apiary_management_method=body.metadata.apiary_management_method,
+        notes=body.metadata.notes,
+    )
+    db.add_all([apiary_record, metadata_record])
+    db.flush()
+    # Server defaults (recorded_at) are assigned by the INSERT, and
+    # batch_metadata hashes its own, so read them back before hashing.
+    db.refresh(apiary_record)
+    db.refresh(metadata_record)
+
+    # Nothing fallible below this line: three appends, then the commit.
     ip, user_agent = request_context(request)
     audit_log.append(
         db,
@@ -83,6 +134,30 @@ def create_batch(
         subject_id=str(batch.id),
         action="batch.created",
         payload={"batch_code": batch.batch_code, "farmer_id": farmer.id, "state": "CREATED"},
+        ip=ip,
+        user_agent=user_agent,
+    )
+    # Three rows, not one merged S0 row: each is a distinct fact with its own
+    # canonical payload, so /verify can say which of them was altered.
+    audit_log.append(
+        db,
+        actor_id=actor.id,
+        actor_role=actor.role,
+        subject_type="batch",
+        subject_id=str(batch.id),
+        action="batch.apiary_recorded",
+        payload=stage_payloads.apiary_record(apiary_record),
+        ip=ip,
+        user_agent=user_agent,
+    )
+    audit_log.append(
+        db,
+        actor_id=actor.id,
+        actor_role=actor.role,
+        subject_type="batch",
+        subject_id=str(batch.id),
+        action="batch.metadata_recorded",
+        payload=stage_payloads.batch_metadata(metadata_record),
         ip=ip,
         user_agent=user_agent,
     )

@@ -20,6 +20,7 @@ Both push the failure to the edge, where it is honest input validation, rather
 than into the driver, where it is a status the contract did not promise.
 """
 
+from decimal import Decimal
 from typing import Annotated
 
 from pydantic import Field
@@ -34,3 +35,14 @@ EntityId = Annotated[int, Field(ge=1, le=_MAX_INT4)]
 
 # A non-negative count that also lands in an int4 column (unit_count, hives).
 Count = Annotated[int, Field(ge=0, le=_MAX_INT4)]
+
+# Decimal degrees. Bounded to the real range, because a `Numeric(9, 6)` column
+# silently refuses anything wider and a 400 from the driver reads as a server
+# fault rather than the invalid input it is.
+Latitude = Annotated[Decimal, Field(ge=Decimal("-90"), le=Decimal("90"), decimal_places=6)]
+Longitude = Annotated[Decimal, Field(ge=Decimal("-180"), le=Decimal("180"), decimal_places=6)]
+
+# A physical measurement: never negative, and inside `Numeric(10, 2)`.
+Measurement = Annotated[
+    Decimal, Field(ge=Decimal("0"), le=Decimal("99999999.99"), decimal_places=2)
+]
