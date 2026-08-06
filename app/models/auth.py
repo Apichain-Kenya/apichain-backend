@@ -37,6 +37,9 @@ class IdempotencyKey(Base):
     key: Mapped[str] = mapped_column(String, primary_key=True)
     actor_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     request_fingerprint: Mapped[str] = mapped_column(String)
-    response_code: Mapped[int] = mapped_column(Integer)
-    response_body: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    # Nullable because the row is inserted as a *reservation* when the request
+    # starts and filled in when it finishes (P3-A). A committed row always has
+    # both; a reservation whose handler failed rolls back with it.
+    response_code: Mapped[int | None] = mapped_column(Integer)
+    response_body: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
