@@ -279,6 +279,7 @@
           "batch_code": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00]*$",
                 "type": "string"
               },
               {
@@ -288,6 +289,8 @@
             "title": "Batch Code"
           },
           "farmer_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
             "title": "Farmer Id",
             "type": "integer"
           }
@@ -362,6 +365,7 @@
           "address": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00]*$",
                 "type": "string"
               },
               {
@@ -375,12 +379,14 @@
             "type": "boolean"
           },
           "consent_text_version": {
+            "pattern": "^[^\\x00]*$",
             "title": "Consent Text Version",
             "type": "string"
           },
           "email": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00]*$",
                 "type": "string"
               },
               {
@@ -390,16 +396,20 @@
             "title": "Email"
           },
           "first_name": {
+            "pattern": "^[^\\x00]*$",
             "title": "First Name",
             "type": "string"
           },
           "last_name": {
+            "pattern": "^[^\\x00]*$",
             "title": "Last Name",
             "type": "string"
           },
           "number_of_hives": {
             "anyOf": [
               {
+                "maximum": 2147483647.0,
+                "minimum": 0.0,
                 "type": "integer"
               },
               {
@@ -410,10 +420,12 @@
           },
           "password": {
             "minLength": 1,
+            "pattern": "^[^\\x00]*$",
             "title": "Password",
             "type": "string"
           },
           "phone": {
+            "pattern": "^[^\\x00]*$",
             "title": "Phone",
             "type": "string"
           }
@@ -491,6 +503,7 @@
           },
           "password": {
             "minLength": 1,
+            "pattern": "^[^\\x00]*$",
             "title": "Password",
             "type": "string"
           }
@@ -505,6 +518,7 @@
       "LogoutRequest": {
         "properties": {
           "refresh_token": {
+            "pattern": "^[^\\x00]*$",
             "title": "Refresh Token",
             "type": "string"
           }
@@ -560,6 +574,7 @@
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
+            "pattern": "^[^\\x00]*$",
             "title": "Refresh Token",
             "type": "string"
           }

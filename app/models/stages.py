@@ -52,7 +52,6 @@ from typing import Any
 from sqlalchemy import (
     Boolean,
     Date,
-    DateTime,
     Enum,
     ForeignKey,
     Integer,
@@ -65,6 +64,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 from app.enums import ConformanceVerdict
+from app.models.types import UtcDateTime
 
 # Decimal degrees to six places is ~0.11 m — finer than any consumer GPS.
 _COORD = Numeric(9, 6)
@@ -88,7 +88,7 @@ class ApiaryLocation(Base):
     altitude: Mapped[Decimal | None] = mapped_column(_MEASURE)
     vegetation_type: Mapped[str | None] = mapped_column(String)
     hive_count: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class ApiaryRecord(Base):
@@ -109,7 +109,7 @@ class ApiaryRecord(Base):
     altitude: Mapped[Decimal | None] = mapped_column(_MEASURE)
     vegetation_type: Mapped[str | None] = mapped_column(String)
     hive_count: Mapped[int | None] = mapped_column(Integer)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class BatchMetadata(Base):
@@ -132,7 +132,7 @@ class BatchMetadata(Base):
     harvest_window_end: Mapped[dt.date] = mapped_column(Date)
     apiary_management_method: Mapped[str] = mapped_column(String)
     notes: Mapped[str | None] = mapped_column(String)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class HarvestRecord(Base):
@@ -142,13 +142,13 @@ class HarvestRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     batch_id: Mapped[int] = mapped_column(ForeignKey("honey_batches.id"), unique=True)
-    harvest_date: Mapped[dt.datetime] = mapped_column(DateTime)
+    harvest_date: Mapped[dt.datetime] = mapped_column(UtcDateTime)
     quantity_kg: Mapped[Decimal] = mapped_column(_MEASURE)
     hive_ids: Mapped[list[Any]] = mapped_column(JSONB)
     gps_lat: Mapped[Decimal | None] = mapped_column(_COORD, info={"pii": "sensitive"})
     gps_lon: Mapped[Decimal | None] = mapped_column(_COORD, info={"pii": "sensitive"})
     notes: Mapped[str | None] = mapped_column(String)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class ProcessRecord(Base):
@@ -161,7 +161,7 @@ class ProcessRecord(Base):
     extraction_method: Mapped[str] = mapped_column(String)
     moisture_content: Mapped[Decimal | None] = mapped_column(_MEASURE)
     handling_notes: Mapped[str | None] = mapped_column(String)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class LabResult(Base):
@@ -190,8 +190,8 @@ class LabResult(Base):
     analyst_name: Mapped[str | None] = mapped_column(String, info={"pii": "identity"})
     certificate_number: Mapped[str | None] = mapped_column(String)
     notes: Mapped[str | None] = mapped_column(String)
-    tested_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    tested_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class PackagingRecord(Base):
@@ -208,7 +208,7 @@ class PackagingRecord(Base):
     unit_count: Mapped[int] = mapped_column(Integer)
     jar_ids: Mapped[list[Any]] = mapped_column(JSONB)
     notes: Mapped[str | None] = mapped_column(String)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class DistributionRecord(Base):
@@ -221,7 +221,7 @@ class DistributionRecord(Base):
     retailer_name: Mapped[str] = mapped_column(String)
     transport_reference: Mapped[str | None] = mapped_column(String)
     handover_notes: Mapped[str | None] = mapped_column(String)
-    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    recorded_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
 class CodexConformance(Base):
@@ -249,4 +249,4 @@ class CodexConformance(Base):
     diastase_passed: Mapped[bool | None] = mapped_column(Boolean)
     free_acidity_passed: Mapped[bool | None] = mapped_column(Boolean)
 
-    evaluated_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    evaluated_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
