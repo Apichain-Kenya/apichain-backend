@@ -1,4 +1,5 @@
-"""Batch creation (P1-F) and the public anchor-proof view (P2-G).
+"""Batch creation (P1-F), the five lifecycle transitions (P3-F/G/H), and the
+public anchor-proof view (P2-G).
 
 `POST /v2/batches` is the state-changing action of the Phase 1 acceptance test.
 `GET /v2/batches/{id}/anchor-proof` is the consumer-facing half of the trust
@@ -24,17 +25,25 @@ from app.models import (
     BatchMetadata,
     BatchState,
     CodexConformance,
+    DistributionRecord,
     Farmer,
     HarvestRecord,
     HoneyBatch,
     LabResult,
+    PackagingRecord,
     ProcessRecord,
     User,
 )
 from app.routers._context import request_context
 from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
 from app.schemas.batches import BatchCreateRequest, BatchResponse, StageRecordedResponse
-from app.schemas.stages import HarvestRecordRequest, LabResultRequest, ProcessRecordRequest
+from app.schemas.stages import (
+    DistributionRecordRequest,
+    HarvestRecordRequest,
+    LabResultRequest,
+    PackagingRecordRequest,
+    ProcessRecordRequest,
+)
 from app.services import (
     anchor_proof,
     audit_log,
@@ -55,6 +64,8 @@ _require_create = requires("batch.create")
 _require_harvest = requires("batch.harvest_record")
 _require_process = requires("batch.process_record")
 _require_lab = requires("batch.lab_verify")
+_require_package = requires("batch.package")
+_require_distribute = requires("batch.distribute")
 
 
 def _generate_batch_code() -> str:
@@ -345,6 +356,75 @@ def record_lab_result(
         ),
         build_payload=stage_payloads.lab_result,
         extra=_score_and_record_conformance,
+    )
+
+
+@router.post(
+    "/{batch_id}/package",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_packaging(
+    body: PackagingRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_package),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S3 -> S4."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.PACKAGED,
+        action="batch.packaged",
+        body=body,
+        build_row=lambda bid: PackagingRecord(
+            batch_id=bid,
+            unit_count=body.unit_count,
+            jar_ids=list(body.jar_ids),
+            notes=body.notes,
+        ),
+        build_payload=stage_payloads.packaging_record,
+    )
+
+
+@router.post(
+    "/{batch_id}/distribute",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_distribution(
+    body: DistributionRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_distribute),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so
+    every transition endpoint refuses a distributed batch, this one included."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.DISTRIBUTED,
+        action="batch.distributed",
+        body=body,
+        build_row=lambda bid: DistributionRecord(
+            batch_id=bid,
+            retailer_name=body.retailer_name,
+            transport_reference=body.transport_reference,
+            handover_notes=body.handover_notes,
+        ),
+        build_payload=stage_payloads.distribution_record,
     )
 
 

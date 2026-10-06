@@ -35,6 +35,11 @@ ACTION_ROLES: dict[str, set[Role]] = {
     # No oracle contract to satisfy in v2 (01), so the lab officer signs their
     # own audit row rather than routing through a shared oracle key (04 §5.3).
     "batch.lab_verify": {Role.lab_officer, Role.admin},
+    # Staff-only, so no farmer can reach them and no ownership check applies
+    # (ownership.assert_acts_for_farmer guards only farmer-reachable actions).
+    # Admit a farmer here and that check becomes mandatory.
+    "batch.package": {Role.operator, Role.admin},
+    "batch.distribute": {Role.operator, Role.admin},
 }
 
 

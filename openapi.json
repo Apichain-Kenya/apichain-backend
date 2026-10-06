@@ -570,6 +570,45 @@
         "title": "BatchResponse",
         "type": "object"
       },
+      "DistributionRecordRequest": {
+        "description": "S5, terminal.",
+        "properties": {
+          "handover_notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handover Notes"
+          },
+          "retailer_name": {
+            "pattern": "^[^\\x00]*$",
+            "title": "Retailer Name",
+            "type": "string"
+          },
+          "transport_reference": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transport Reference"
+          }
+        },
+        "required": [
+          "retailer_name"
+        ],
+        "title": "DistributionRecordRequest",
+        "type": "object"
+      },
       "ErrorResponse": {
         "description": "OpenAPI shape of the error envelope, so documented error responses match\nwhat the handler emits (keeps the Schemathesis contract test honest).",
         "properties": {
@@ -1051,6 +1090,43 @@
           "refresh_token"
         ],
         "title": "LogoutRequest",
+        "type": "object"
+      },
+      "PackagingRecordRequest": {
+        "description": "S4. One QR per batch, so v1's per-jar `qr_codes` is gone; `unit_count`\nalready equals the jar count.",
+        "properties": {
+          "jar_ids": {
+            "default": [],
+            "items": {
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            "title": "Jar Ids",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "unit_count": {
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Unit Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unit_count"
+        ],
+        "title": "PackagingRecordRequest",
         "type": "object"
       },
       "PingResponse": {
@@ -1755,6 +1831,125 @@
         ]
       }
     },
+    "/v2/batches/{batch_id}/distribute": {
+      "post": {
+        "description": "S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so\nevery transition endpoint refuses a distributed batch, this one included.",
+        "operationId": "record_distribution_v2_batches__batch_id__distribute_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DistributionRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Distribution",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
     "/v2/batches/{batch_id}/harvest": {
       "post": {
         "description": "S0 -> S1.",
@@ -1988,6 +2183,125 @@
           }
         ],
         "summary": "Record Lab Result",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/package": {
+      "post": {
+        "description": "S3 -> S4.",
+        "operationId": "record_packaging_v2_batches__batch_id__package_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackagingRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Packaging",
         "tags": [
           "batches"
         ]
