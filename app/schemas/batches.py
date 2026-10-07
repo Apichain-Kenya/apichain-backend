@@ -51,9 +51,10 @@ class BatchMetadataInput(BaseModel):
 
 class BatchCreateRequest(BaseModel):
     # Bounded to int32 in P3-D. Unbounded since Phase 1, and `db.get(Farmer, n)`
-    # with a larger value is a driver-level numeric overflow, not a miss — the
-    # best available explanation for the single unreproduced contract failure
-    # the Phase 2 handoff records against this endpoint.
+    # with a larger value is a driver-level numeric overflow, not a miss. This
+    # was once suspected of causing the Phase 2 contract intermittent; it did
+    # not. That was a Hypothesis health check, explained in schemathesis.toml.
+    # The bound stays as hardening.
     farmer_id: EntityId
     # Both required as of P3-E. There is no untyped fallback and no grace
     # period: v1 shipped `Union[BatchMetadataInput, dict]` for one release and
