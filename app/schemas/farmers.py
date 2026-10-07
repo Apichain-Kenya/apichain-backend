@@ -3,19 +3,21 @@ grant, which is captured in the same transaction (08 D10)."""
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.common import Count, SafeStr
+
 
 class FarmerEnrollRequest(BaseModel):
-    first_name: str
-    last_name: str
-    phone: str
-    email: str | None = None
-    address: str | None = None
-    number_of_hives: int | None = None
+    first_name: SafeStr
+    last_name: SafeStr
+    phone: SafeStr
+    email: SafeStr | None = None
+    address: SafeStr | None = None
+    number_of_hives: Count | None = None
     # The farmer's own login credential.
-    password: str = Field(min_length=1)
+    password: SafeStr = Field(min_length=1)
     # Consent captured at enrollment (data_processing).
     consent_granted: bool
-    consent_text_version: str
+    consent_text_version: SafeStr
 
     @field_validator("password")
     @classmethod

@@ -1,0 +1,12 @@
+# Reviewed gitleaks false positives, one fingerprint per line.
+# Each entry pins one finding in one commit; a new finding still fails the scan.
+# Do not quote flagged code in these comments: gitleaks scans this file too.
+
+# P3-A test: a keyword argument named after the idempotency key was read as
+# an API key. The value is the test constant "concurrent-key", not a
+# credential. Reviewed 2026-10-07.
+3722cfe81a4884d88adf640edb195e723682c700:tests/test_idempotency_race.py:generic-api-key:161
+
+# The first version of this file quoted that same line in a comment, which
+# matched the same rule. Already pushed, so it is pinned rather than rewritten.
+bdeb1bd3d5c2ae5c92738ab5f1d7f8bdbc32189f:.gitleaksignore:generic-api-key:4

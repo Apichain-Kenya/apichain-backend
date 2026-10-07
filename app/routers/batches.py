@@ -1,14 +1,11 @@
-"""Batch creation (P1-F) and the public anchor-proof view (P2-G).
+"""Batch creation (P1-F) and the five lifecycle transitions (P3-F/G/H).
 
-`POST /v2/batches` is the state-changing action of the Phase 1 acceptance test.
-`GET /v2/batches/{id}/anchor-proof` is the consumer-facing half of the trust
-model: it hands out everything needed to verify a record's inclusion in the
-public anchor offline, and says honestly when a record is not anchored yet.
+Staff-facing and keyed by the internal `id`. The two anonymous consumer views
+(anchor-proof, verify) live in `routers/public.py`, keyed by the random
+`public_id`, so no public route can be walked by sequential id.
 """
 
-import base64
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, Path, Request
 from fastapi.responses import JSONResponse
@@ -18,11 +15,42 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import requires
 from app.errors import APIError, error_responses
-from app.models import BatchState, Farmer, HoneyBatch, User
+from app.models import (
+    ApiaryLocation,
+    ApiaryRecord,
+    BatchMetadata,
+    BatchState,
+    CodexConformance,
+    DistributionRecord,
+    Farmer,
+    HarvestRecord,
+    HoneyBatch,
+    LabResult,
+    PackagingRecord,
+    ProcessRecord,
+    User,
+)
 from app.routers._context import request_context
-from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
-from app.schemas.batches import BatchCreateRequest, BatchResponse
-from app.services import anchor_proof, audit_log, idempotency
+from app.schemas.batches import (
+    BatchCreateRequest,
+    BatchResponse,
+    StageRecordedResponse,
+)
+from app.schemas.stages import (
+    DistributionRecordRequest,
+    HarvestRecordRequest,
+    LabResultRequest,
+    PackagingRecordRequest,
+    ProcessRecordRequest,
+)
+from app.services import (
+    audit_log,
+    codex_scoring,
+    idempotency,
+    ownership,
+    stage_payloads,
+    stage_writer,
+)
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
 # parameter means an out-of-range id is invalid input (422) instead of
@@ -31,6 +59,11 @@ _MAX_INT4 = 2_147_483_647
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 _require_create = requires("batch.create")
+_require_harvest = requires("batch.harvest_record")
+_require_process = requires("batch.process_record")
+_require_lab = requires("batch.lab_verify")
+_require_package = requires("batch.package")
+_require_distribute = requires("batch.distribute")
 
 
 def _generate_batch_code() -> str:
@@ -61,6 +94,22 @@ def create_batch(
         raise APIError(
             404, "farmer_not_found", "Farmer does not exist", {"farmer_id": body.farmer_id}
         )
+    # Role admits farmers here; this says which farmer's batches they may open.
+    ownership.assert_acts_for_farmer(db, actor, farmer.id)
+
+    apiary = db.get(ApiaryLocation, body.apiary_id)
+    if apiary is None:
+        raise APIError(
+            404, "apiary_not_found", "Apiary does not exist", {"apiary_id": body.apiary_id}
+        )
+    if apiary.farmer_id != farmer.id:
+        # The provenance claim would otherwise point at someone else's hives.
+        raise APIError(
+            409,
+            "apiary_farmer_mismatch",
+            "Apiary belongs to a different farmer",
+            {"apiary_id": apiary.id, "farmer_id": farmer.id},
+        )
 
     batch = HoneyBatch(
         farmer_id=farmer.id,
@@ -74,6 +123,35 @@ def create_batch(
         db.rollback()
         raise APIError(409, "batch_code_taken", "batch_code already exists") from exc
 
+    # The two S0 pre-images. `apiary_records` snapshots rather than referencing,
+    # so editing the apiary later cannot invalidate this batch's anchored hash
+    # (v1 Sprint 6).
+    apiary_record = ApiaryRecord(
+        batch_id=batch.id,
+        apiary_id=apiary.id,
+        latitude=apiary.latitude,
+        longitude=apiary.longitude,
+        altitude=apiary.altitude,
+        vegetation_type=apiary.vegetation_type,
+        hive_count=apiary.hive_count,
+    )
+    metadata_record = BatchMetadata(
+        batch_id=batch.id,
+        honey_type=body.metadata.honey_type,
+        expected_yield_kg=body.metadata.expected_yield_kg,
+        harvest_window_start=body.metadata.harvest_window_start,
+        harvest_window_end=body.metadata.harvest_window_end,
+        apiary_management_method=body.metadata.apiary_management_method,
+        notes=body.metadata.notes,
+    )
+    db.add_all([apiary_record, metadata_record])
+    db.flush()
+    # Server defaults (recorded_at) are assigned by the INSERT, and
+    # batch_metadata hashes its own, so read them back before hashing.
+    db.refresh(apiary_record)
+    db.refresh(metadata_record)
+
+    # Nothing fallible below this line: three appends, then the commit.
     ip, user_agent = request_context(request)
     audit_log.append(
         db,
@@ -86,61 +164,254 @@ def create_batch(
         ip=ip,
         user_agent=user_agent,
     )
+    # Three rows, not one merged S0 row: each is a distinct fact with its own
+    # canonical payload, so /verify can say which of them was altered.
+    audit_log.append(
+        db,
+        actor_id=actor.id,
+        actor_role=actor.role,
+        subject_type="batch",
+        subject_id=str(batch.id),
+        action="batch.apiary_recorded",
+        payload=stage_payloads.apiary_record(apiary_record),
+        ip=ip,
+        user_agent=user_agent,
+    )
+    audit_log.append(
+        db,
+        actor_id=actor.id,
+        actor_role=actor.role,
+        subject_type="batch",
+        subject_id=str(batch.id),
+        action="batch.metadata_recorded",
+        payload=stage_payloads.batch_metadata(metadata_record),
+        ip=ip,
+        user_agent=user_agent,
+    )
     response = BatchResponse.model_validate(batch)
     idempotency.finish(db, idem, status_code=201, body=response.model_dump(mode="json"))
     db.commit()
     return response
 
 
-def _as_utc(value: datetime | None) -> datetime | None:
-    """Columns are naive UTC (matching audit_log); the wire carries the zone."""
-    return value.replace(tzinfo=UTC) if value is not None else None
-
-
-@router.get(
-    "/{batch_id}/anchor-proof",
-    response_model=AnchorProofResponse,
-    responses=error_responses(404),
+@router.post(
+    "/{batch_id}/harvest",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
 )
-def batch_anchor_proof(
+def record_harvest(
+    body: HarvestRecordRequest,
+    request: Request,
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
-) -> AnchorProofResponse:
-    """Public: everything needed to verify this batch's records offline.
+    actor: User = Depends(_require_harvest),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S0 -> S1."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.HARVESTED,
+        action="batch.harvest_recorded",
+        body=body,
+        build_row=lambda bid: HarvestRecord(
+            batch_id=bid,
+            harvest_date=body.harvest_date,
+            quantity_kg=body.quantity_kg,
+            hive_ids=list(body.hive_ids),
+            gps_lat=body.gps_lat,
+            gps_lon=body.gps_lon,
+            notes=body.notes,
+        ),
+        build_payload=stage_payloads.harvest_record,
+    )
 
-    Unauthenticated by design — the consumer scanning a jar is not a user
-    (04 §5.3). One entry per audit row, each carrying its own status, so a
-    record that exists in our log but has no public anchor yet is reported as
-    `pending` rather than as a missing field (03 §6).
+
+@router.post(
+    "/{batch_id}/process",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_process(
+    body: ProcessRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_process),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S1 -> S2."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.PROCESSED,
+        action="batch.process_recorded",
+        body=body,
+        build_row=lambda bid: ProcessRecord(
+            batch_id=bid,
+            extraction_method=body.extraction_method,
+            moisture_content=body.moisture_content,
+            handling_notes=body.handling_notes,
+        ),
+        build_payload=stage_payloads.process_record,
+    )
+
+
+def _score_and_record_conformance(db: Session, row: LabResult) -> dict[str, object]:
+    """Evaluate the panel, persist the verdict, and hand it to the audit payload.
+
+    Runs between the `lab_results` flush and the append, which is why it must
+    not be fallible: `codex_scoring.evaluate` is pure (no I/O, no model file),
+    and the only write is one INSERT into a table with no constraint that can
+    surprise us. Anything that could raise here would raise *after* the stage
+    row exists and would risk doing so after the append.
     """
-    batch = db.get(HoneyBatch, batch_id)
-    if batch is None:
-        raise APIError(404, "batch_not_found", "Batch does not exist", {"batch_id": batch_id})
+    report = codex_scoring.evaluate(codex_scoring.LabMeasurements.from_row(row))
+    # NULL for a parameter the lab did not report — distinct from False.
+    passed = {
+        p.parameter: (None if p.status == "not_measured" else p.status == "pass")
+        for p in report.parameters
+    }
+    db.add(
+        CodexConformance(
+            batch_id=row.batch_id,
+            rule_set_version=report.rule_set_version,
+            verdict=report.verdict,
+            moisture_passed=passed["moisture"],
+            fructose_glucose_passed=passed["fructose_glucose"],
+            sucrose_passed=passed["sucrose"],
+            hmf_passed=passed["hmf"],
+            diastase_passed=passed["diastase"],
+            free_acidity_passed=passed["free_acidity"],
+        )
+    )
+    # Anchor the judgement, not only the numbers. Without this the verdict is
+    # re-derivable but was never publicly witnessed.
+    return {"conformance": codex_scoring.as_payload(report)}
 
-    entries = anchor_proof.entries_for_subject(db, subject_type="batch", subject_id=str(batch.id))
-    return AnchorProofResponse(
-        batch_id=batch.id,
-        batch_code=batch.batch_code,
-        status=anchor_proof.rollup(entries),  # type: ignore[arg-type]
-        entries=[
-            AnchorProofEntry(
-                audit_id=entry.audit_id,
-                action=entry.action,
-                row_hash=entry.row_hash.hex(),
-                status=entry.status,  # type: ignore[arg-type]
-                merkle_root=entry.anchor.merkle_root.hex() if entry.anchor else None,
-                merkle_path=(
-                    [ProofStepOut(sibling=s.sibling.hex(), position=s.position) for s in entry.path]
-                    if entry.path is not None
-                    else None
-                ),
-                anchor_target=entry.anchor.anchor_target if entry.anchor else None,
-                ots_proof=(
-                    base64.b64encode(entry.anchor.anchor_proof).decode() if entry.anchor else None
-                ),
-                anchored_at=_as_utc(entry.anchor.anchored_at) if entry.anchor else None,
-                verified_at=_as_utc(entry.anchor.verified_at) if entry.anchor else None,
-            )
-            for entry in entries
-        ],
+
+@router.post(
+    "/{batch_id}/lab-verify",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_lab_result(
+    body: LabResultRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_lab),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S2 -> S3, and the only transition that produces a judgement.
+
+    A failing verdict does **not** block the transition: `LAB_VERIFIED` means a
+    lab result has been recorded, not that the honey passed. Conflating them
+    would make a failing result unrecordable, which is how bad results go
+    missing. The verdict is anchored and surfaced instead.
+    """
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.LAB_VERIFIED,
+        action="batch.lab_verified",
+        body=body,
+        build_row=lambda bid: LabResult(
+            batch_id=bid,
+            moisture_pct=body.moisture_pct,
+            fructose_glucose_g_100g=body.fructose_glucose_g_100g,
+            sucrose_g_100g=body.sucrose_g_100g,
+            hmf_mg_kg=body.hmf_mg_kg,
+            diastase_schade=body.diastase_schade,
+            free_acidity_meq_kg=body.free_acidity_meq_kg,
+            pollen_density=body.pollen_density,
+            laboratory_name=body.laboratory_name,
+            analyst_name=body.analyst_name,
+            certificate_number=body.certificate_number,
+            notes=body.notes,
+            tested_at=body.tested_at,
+        ),
+        build_payload=stage_payloads.lab_result,
+        extra=_score_and_record_conformance,
+    )
+
+
+@router.post(
+    "/{batch_id}/package",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_packaging(
+    body: PackagingRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_package),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S3 -> S4."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.PACKAGED,
+        action="batch.packaged",
+        body=body,
+        build_row=lambda bid: PackagingRecord(
+            batch_id=bid,
+            unit_count=body.unit_count,
+            jar_ids=list(body.jar_ids),
+            notes=body.notes,
+        ),
+        build_payload=stage_payloads.packaging_record,
+    )
+
+
+@router.post(
+    "/{batch_id}/distribute",
+    response_model=StageRecordedResponse,
+    status_code=201,
+    responses=error_responses(401, 403, 404, 409),
+)
+def record_distribution(
+    body: DistributionRecordRequest,
+    request: Request,
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_distribute),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StageRecordedResponse | JSONResponse:
+    """S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so
+    every transition endpoint refuses a distributed batch, this one included."""
+    return stage_writer.record_stage(
+        db,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        batch_id=batch_id,
+        target=BatchState.DISTRIBUTED,
+        action="batch.distributed",
+        body=body,
+        build_row=lambda bid: DistributionRecord(
+            batch_id=bid,
+            retailer_name=body.retailer_name,
+            transport_reference=body.transport_reference,
+            handover_notes=body.handover_notes,
+        ),
+        build_payload=stage_payloads.distribution_record,
     )

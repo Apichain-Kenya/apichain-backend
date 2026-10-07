@@ -2,7 +2,7 @@
 """Verify an anchor-proof bundle offline (P2-H, 09 §11).
 
 No database, no server, no network. Point it at a bundle saved from
-`GET /v2/batches/{id}/anchor-proof` and it re-derives everything itself:
+`GET /v2/public/batches/{public_id}/anchor-proof` and it re-derives everything itself:
 
     python scripts/verify_anchor.py --bundle proof.json
     python scripts/verify_anchor.py --bundle proof.json --audit-id 41

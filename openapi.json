@@ -214,6 +214,10 @@
             "title": "Entries",
             "type": "array"
           },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
           "status": {
             "enum": [
               "pending",
@@ -227,6 +231,7 @@
         },
         "required": [
           "batch_id",
+          "public_id",
           "batch_code",
           "status",
           "entries"
@@ -242,6 +247,180 @@
         ],
         "title": "AnchorTarget",
         "type": "string"
+      },
+      "ApiaryCreateRequest": {
+        "properties": {
+          "altitude": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude"
+          },
+          "farmer_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Farmer Id",
+            "type": "integer"
+          },
+          "hive_count": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hive Count"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,6}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,6}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "name": {
+            "pattern": "^[^\\x00]*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "vegetation_type": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vegetation Type"
+          }
+        },
+        "required": [
+          "farmer_id",
+          "name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "ApiaryCreateRequest",
+        "type": "object"
+      },
+      "ApiaryManagementMethod": {
+        "enum": [
+          "organic",
+          "conventional",
+          "regenerative"
+        ],
+        "title": "ApiaryManagementMethod",
+        "type": "string"
+      },
+      "ApiaryResponse": {
+        "properties": {
+          "altitude": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude"
+          },
+          "farmer_id": {
+            "title": "Farmer Id",
+            "type": "integer"
+          },
+          "hive_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hive Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "latitude": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Latitude",
+            "type": "string"
+          },
+          "longitude": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Longitude",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "vegetation_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vegetation Type"
+          }
+        },
+        "required": [
+          "id",
+          "farmer_id",
+          "name",
+          "latitude",
+          "longitude",
+          "altitude",
+          "vegetation_type",
+          "hive_count"
+        ],
+        "title": "ApiaryResponse",
+        "type": "object"
       },
       "AuditHealthResponse": {
         "properties": {
@@ -276,9 +455,16 @@
       },
       "BatchCreateRequest": {
         "properties": {
+          "apiary_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Apiary Id",
+            "type": "integer"
+          },
           "batch_code": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00]*$",
                 "type": "string"
               },
               {
@@ -288,14 +474,77 @@
             "title": "Batch Code"
           },
           "farmer_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
             "title": "Farmer Id",
             "type": "integer"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/BatchMetadataInput"
           }
         },
         "required": [
-          "farmer_id"
+          "farmer_id",
+          "apiary_id",
+          "metadata"
         ],
         "title": "BatchCreateRequest",
+        "type": "object"
+      },
+      "BatchMetadataInput": {
+        "description": "What the farmer declares about a batch at creation \u2014 the S0 pre-image.\n\n`notes` is stored but deliberately outside the canonical payload, so fixing\na typo cannot invalidate anchored history (v1 Sprint 8; see\n`stage_payloads.batch_metadata`). It is not shown on the anonymous\n`/verify` view: free text is withheld there (`verification.FIELD_POLICY`).",
+        "properties": {
+          "apiary_management_method": {
+            "$ref": "#/components/schemas/ApiaryManagementMethod"
+          },
+          "expected_yield_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Expected Yield Kg"
+          },
+          "harvest_window_end": {
+            "format": "date",
+            "title": "Harvest Window End",
+            "type": "string"
+          },
+          "harvest_window_start": {
+            "format": "date",
+            "title": "Harvest Window Start",
+            "type": "string"
+          },
+          "honey_type": {
+            "$ref": "#/components/schemas/HoneyType"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "honey_type",
+          "expected_yield_kg",
+          "harvest_window_start",
+          "harvest_window_end",
+          "apiary_management_method"
+        ],
+        "title": "BatchMetadataInput",
         "type": "object"
       },
       "BatchResponse": {
@@ -312,6 +561,10 @@
             "title": "Id",
             "type": "integer"
           },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -319,11 +572,207 @@
         },
         "required": [
           "id",
+          "public_id",
           "batch_code",
           "farmer_id",
           "state"
         ],
         "title": "BatchResponse",
+        "type": "object"
+      },
+      "BatchVerifyResponse": {
+        "properties": {
+          "anchor_status": {
+            "enum": [
+              "pending",
+              "partial",
+              "anchored",
+              "confirmed"
+            ],
+            "title": "Anchor Status",
+            "type": "string"
+          },
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "integer"
+          },
+          "conformance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConformanceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/StageVerifications"
+          }
+        },
+        "required": [
+          "batch_id",
+          "public_id",
+          "batch_code",
+          "state",
+          "metadata",
+          "verification",
+          "conformance",
+          "anchor_status"
+        ],
+        "title": "BatchVerifyResponse",
+        "type": "object"
+      },
+      "ConformanceOut": {
+        "description": "The Codex/KEBS verdict re-derived from the lab row now, under the rule\nset recorded with it. Every limit and its basis travel with the result, so\na reader never needs to know which rules were in force.",
+        "properties": {
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ConformanceParameterOut"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "rule_set_version": {
+            "title": "Rule Set Version",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail",
+              "incomplete"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_set_version",
+          "verdict",
+          "parameters"
+        ],
+        "title": "ConformanceOut",
+        "type": "object"
+      },
+      "ConformanceParameterOut": {
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "comparator": {
+            "enum": [
+              "<=",
+              ">="
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "string"
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "parameter": {
+            "title": "Parameter",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "not_measured"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameter",
+          "measured",
+          "unit",
+          "comparator",
+          "limit",
+          "basis",
+          "status"
+        ],
+        "title": "ConformanceParameterOut",
+        "type": "object"
+      },
+      "DistributionRecordRequest": {
+        "description": "S5, terminal.",
+        "properties": {
+          "handover_notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handover Notes"
+          },
+          "retailer_name": {
+            "pattern": "^[^\\x00]*$",
+            "title": "Retailer Name",
+            "type": "string"
+          },
+          "transport_reference": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transport Reference"
+          }
+        },
+        "required": [
+          "retailer_name"
+        ],
+        "title": "DistributionRecordRequest",
         "type": "object"
       },
       "ErrorResponse": {
@@ -362,6 +811,7 @@
           "address": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00]*$",
                 "type": "string"
               },
               {
@@ -375,12 +825,14 @@
             "type": "boolean"
           },
           "consent_text_version": {
+            "pattern": "^[^\\x00]*$",
             "title": "Consent Text Version",
             "type": "string"
           },
           "email": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00]*$",
                 "type": "string"
               },
               {
@@ -390,16 +842,20 @@
             "title": "Email"
           },
           "first_name": {
+            "pattern": "^[^\\x00]*$",
             "title": "First Name",
             "type": "string"
           },
           "last_name": {
+            "pattern": "^[^\\x00]*$",
             "title": "Last Name",
             "type": "string"
           },
           "number_of_hives": {
             "anyOf": [
               {
+                "maximum": 2147483647.0,
+                "minimum": 0.0,
                 "type": "integer"
               },
               {
@@ -410,10 +866,12 @@
           },
           "password": {
             "minLength": 1,
+            "pattern": "^[^\\x00]*$",
             "title": "Password",
             "type": "string"
           },
           "phone": {
+            "pattern": "^[^\\x00]*$",
             "title": "Phone",
             "type": "string"
           }
@@ -482,6 +940,289 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HarvestRecordRequest": {
+        "description": "S1. `harvest_date` is actor-asserted and hashed; an offset on the wire\nis normalized to UTC before storage (see `models/types.UtcDateTime`).",
+        "properties": {
+          "gps_lat": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,6}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gps Lat"
+          },
+          "gps_lon": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,6}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gps Lon"
+          },
+          "harvest_date": {
+            "format": "date-time",
+            "title": "Harvest Date",
+            "type": "string"
+          },
+          "hive_ids": {
+            "default": [],
+            "items": {
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            "title": "Hive Ids",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "quantity_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity Kg"
+          }
+        },
+        "required": [
+          "harvest_date",
+          "quantity_kg"
+        ],
+        "title": "HarvestRecordRequest",
+        "type": "object"
+      },
+      "HoneyType": {
+        "description": "Validated here rather than as a PostgreSQL enum, so amending the list is\na one-file edit instead of an `ALTER TYPE` migration (v1 Sprint 8).",
+        "enum": [
+          "acacia",
+          "wildflower",
+          "eucalyptus",
+          "sunflower",
+          "mixed"
+        ],
+        "title": "HoneyType",
+        "type": "string"
+      },
+      "LabResultRequest": {
+        "description": "S3. Every measurement names its quantity and its unit.\n\n`02` R9 is why: v1 carried `sucrose_level`, which actually held total\nsugars around 75-80% while the Codex sucrose limit is 5 g/100g, so a scorer\nreading it would have failed every honest batch. Naming the field for what\nit measures is the cheapest possible guard against that class of mistake.\n\nEvery parameter is optional. A lab that reports five of six should be able\nto submit; the scorer marks the sixth `not_measured` and the verdict is\n`INCOMPLETE` rather than a confident pass.",
+        "properties": {
+          "analyst_name": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyst Name"
+          },
+          "certificate_number": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Number"
+          },
+          "diastase_schade": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diastase Schade"
+          },
+          "free_acidity_meq_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Acidity Meq Kg"
+          },
+          "fructose_glucose_g_100g": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fructose Glucose G 100G"
+          },
+          "hmf_mg_kg": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hmf Mg Kg"
+          },
+          "laboratory_name": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Laboratory Name"
+          },
+          "moisture_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moisture Pct"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "pollen_density": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pollen Density"
+          },
+          "sucrose_g_100g": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sucrose G 100G"
+          },
+          "tested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tested At"
+          }
+        },
+        "title": "LabResultRequest",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "identifier": {
@@ -491,6 +1232,7 @@
           },
           "password": {
             "minLength": 1,
+            "pattern": "^[^\\x00]*$",
             "title": "Password",
             "type": "string"
           }
@@ -505,6 +1247,7 @@
       "LogoutRequest": {
         "properties": {
           "refresh_token": {
+            "pattern": "^[^\\x00]*$",
             "title": "Refresh Token",
             "type": "string"
           }
@@ -513,6 +1256,80 @@
           "refresh_token"
         ],
         "title": "LogoutRequest",
+        "type": "object"
+      },
+      "MetadataPublic": {
+        "description": "The farmer's declaration as the anonymous `/verify` view shows it.\n\nNo `notes`: free text can carry personal data whatever it was meant for,\nand this view is broadcast to anyone who scans a jar.",
+        "properties": {
+          "apiary_management_method": {
+            "title": "Apiary Management Method",
+            "type": "string"
+          },
+          "expected_yield_kg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Expected Yield Kg",
+            "type": "string"
+          },
+          "harvest_window_end": {
+            "format": "date",
+            "title": "Harvest Window End",
+            "type": "string"
+          },
+          "harvest_window_start": {
+            "format": "date",
+            "title": "Harvest Window Start",
+            "type": "string"
+          },
+          "honey_type": {
+            "title": "Honey Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "honey_type",
+          "expected_yield_kg",
+          "harvest_window_start",
+          "harvest_window_end",
+          "apiary_management_method"
+        ],
+        "title": "MetadataPublic",
+        "type": "object"
+      },
+      "PackagingRecordRequest": {
+        "description": "S4. One QR per batch, so v1's per-jar `qr_codes` is gone; `unit_count`\nalready equals the jar count.",
+        "properties": {
+          "jar_ids": {
+            "default": [],
+            "items": {
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            "title": "Jar Ids",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "unit_count": {
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Unit Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unit_count"
+        ],
+        "title": "PackagingRecordRequest",
         "type": "object"
       },
       "PingResponse": {
@@ -532,6 +1349,50 @@
           "version"
         ],
         "title": "PingResponse",
+        "type": "object"
+      },
+      "ProcessRecordRequest": {
+        "description": "S2.",
+        "properties": {
+          "extraction_method": {
+            "pattern": "^[^\\x00]*$",
+            "title": "Extraction Method",
+            "type": "string"
+          },
+          "handling_notes": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handling Notes"
+          },
+          "moisture_content": {
+            "anyOf": [
+              {
+                "maximum": 99999999.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moisture Content"
+          }
+        },
+        "required": [
+          "extraction_method"
+        ],
+        "title": "ProcessRecordRequest",
         "type": "object"
       },
       "ProofStepOut": {
@@ -560,6 +1421,7 @@
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
+            "pattern": "^[^\\x00]*$",
             "title": "Refresh Token",
             "type": "string"
           }
@@ -568,6 +1430,223 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "StageRecordedResponse": {
+        "description": "What a transition returns: where the batch now is, and what it recorded.",
+        "properties": {
+          "audit_id": {
+            "title": "Audit Id",
+            "type": "integer"
+          },
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "integer"
+          },
+          "payload_hash": {
+            "title": "Payload Hash",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "batch_code",
+          "state",
+          "audit_id",
+          "payload_hash"
+        ],
+        "title": "StageRecordedResponse",
+        "type": "object"
+      },
+      "StageVerificationOut": {
+        "description": "One stage of the three-way match.\n\n`payload` is the canonical pre-image as the stage row stands now. When\n`payload_precision` is `exact`, hashing it reproduces `recomputed_hash`.\nWhen it is `reduced`, the fields in `redacted_fields` were coarsened or\nwithheld for privacy and **both hashes are omitted**, because they commit\nto the exact values; `match` is then the server's own comparison.",
+        "properties": {
+          "anchor_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "anchored",
+                  "confirmed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Status"
+          },
+          "audit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Id"
+          },
+          "match": {
+            "title": "Match",
+            "type": "boolean"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "payload_precision": {
+            "enum": [
+              "exact",
+              "reduced"
+            ],
+            "title": "Payload Precision",
+            "type": "string"
+          },
+          "recomputed_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recomputed Hash"
+          },
+          "recorded_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded Hash"
+          },
+          "redacted_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Redacted Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "audit_id",
+          "payload",
+          "recomputed_hash",
+          "recorded_hash",
+          "match",
+          "anchor_status",
+          "payload_precision",
+          "redacted_fields"
+        ],
+        "title": "StageVerificationOut",
+        "type": "object"
+      },
+      "StageVerifications": {
+        "description": "`null` means the batch has not reached that stage yet.",
+        "properties": {
+          "apiary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "distribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "harvest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lab": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packaging": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "process": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "apiary",
+          "metadata",
+          "harvest",
+          "process",
+          "lab",
+          "packaging",
+          "distribution"
+        ],
+        "title": "StageVerifications",
         "type": "object"
       },
       "StatusResponse": {
@@ -679,6 +1758,103 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/v2/apiaries": {
+      "post": {
+        "operationId": "create_apiary_v2_apiaries_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiaryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Apiary",
+        "tags": [
+          "apiaries"
+        ]
       }
     },
     "/v2/audit/anchor-health": {
@@ -983,10 +2159,10 @@
         ]
       }
     },
-    "/v2/batches/{batch_id}/anchor-proof": {
-      "get": {
-        "description": "Public: everything needed to verify this batch's records offline.\n\nUnauthenticated by design \u2014 the consumer scanning a jar is not a user\n(04 \u00a75.3). One entry per audit row, each carrying its own status, so a\nrecord that exists in our log but has no public anchor yet is reported as\n`pending` rather than as a missing field (03 \u00a76).",
-        "operationId": "batch_anchor_proof_v2_batches__batch_id__anchor_proof_get",
+    "/v2/batches/{batch_id}/distribute": {
+      "post": {
+        "description": "S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so\nevery transition endpoint refuses a distributed batch, this one included.",
+        "operationId": "record_distribution_v2_batches__batch_id__distribute_post",
         "parameters": [
           {
             "in": "path",
@@ -998,14 +2174,40 @@
               "title": "Batch Id",
               "type": "integer"
             }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DistributionRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AnchorProofResponse"
+                  "$ref": "#/components/schemas/StageRecordedResponse"
                 }
               }
             },
@@ -1013,6 +2215,26 @@
           },
           "400": {
             "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -1023,6 +2245,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -1035,7 +2267,488 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Batch Anchor Proof",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Distribution",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/harvest": {
+      "post": {
+        "description": "S0 -> S1.",
+        "operationId": "record_harvest_v2_batches__batch_id__harvest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HarvestRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Harvest",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/lab-verify": {
+      "post": {
+        "description": "S2 -> S3, and the only transition that produces a judgement.\n\nA failing verdict does **not** block the transition: `LAB_VERIFIED` means a\nlab result has been recorded, not that the honey passed. Conflating them\nwould make a failing result unrecordable, which is how bad results go\nmissing. The verdict is anchored and surfaced instead.",
+        "operationId": "record_lab_result_v2_batches__batch_id__lab_verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabResultRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Lab Result",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/package": {
+      "post": {
+        "description": "S3 -> S4.",
+        "operationId": "record_packaging_v2_batches__batch_id__package_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackagingRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Packaging",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/process": {
+      "post": {
+        "description": "S1 -> S2.",
+        "operationId": "record_process_v2_batches__batch_id__process_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRecordedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Process",
         "tags": [
           "batches"
         ]
@@ -1157,6 +2870,124 @@
         "summary": "Ping",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/v2/public/batches/{public_id}/anchor-proof": {
+      "get": {
+        "description": "Everything needed to verify this batch's records offline.\n\nOne entry per audit row, each carrying its own status, so a record that\nexists in our log but has no public anchor yet is reported as `pending`\nrather than as a missing field (03 \u00a76).",
+        "operationId": "batch_anchor_proof_v2_public_batches__public_id__anchor_proof_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorProofResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch Anchor Proof",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v2/public/batches/{public_id}/verify": {
+      "get": {
+        "description": "The three-way match over every recorded stage of this batch.\n\nBeing anonymous, it applies `verification.FIELD_POLICY` (hive coordinates\nat 2 dp, altitude at 100 m, free text and the analyst's name withheld) and\npublishes no hashes for a redacted block. Staff see exact values in an\nauthenticated view, never here. Reports facts only: no score, no band \u2014\nthose mappings are the client's (03 \u00a71, \u00a76).",
+        "operationId": "verify_batch_v2_public_batches__public_id__verify_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Batch",
+        "tags": [
+          "public"
         ]
       }
     }

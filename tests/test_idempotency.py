@@ -1,79 +1,64 @@
 """Idempotency-Key on domain writes (P1-H). Honored when present; a replay
 returns the stored response and does not re-run the handler (no second audit
-row); a same-key/different-body request conflicts."""
+row); a same-key/different-body request conflicts.
+
+P3-E made batch creation write three audit rows instead of one, so the "writes
+once" assertions count three rather than one — the number that matters is that
+a replay adds none of them.
+"""
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models import Farmer, Role, User
-from app.services import security
+from app.enums import Role
+from tests.helpers import METADATA, auth, seed_apiary, seed_farmer, seed_user
 
 
-def _seed_operator(engine, phone: str) -> int:
-    with Session(engine) as s:
-        u = User(
-            phone=phone,
-            password_hash=security.hash_password("pw"),
-            role=Role.operator,
-            is_root=False,
-            is_active=True,
-        )
-        s.add(u)
-        s.commit()
-        return u.id
-
-
-def _seed_farmer(engine, phone: str) -> int:
-    with Session(engine) as s:
-        f = Farmer(first_name="A", last_name="B", phone=phone)
-        s.add(f)
-        s.commit()
-        return f.id
-
-
-def _auth(uid: int) -> dict[str, str]:
-    return {"Authorization": f"Bearer {security.create_access_token(sub=uid, role=Role.operator)}"}
+def _batch_body(farmer_id: int, apiary_id: int) -> dict:
+    return {"farmer_id": farmer_id, "apiary_id": apiary_id, "metadata": METADATA}
 
 
 def test_replay_returns_stored_response_and_writes_once(client, migrated_engine):
-    op = _seed_operator(migrated_engine, "+254700001001")
-    farmer = _seed_farmer(migrated_engine, "+254700001002")
-    headers = {**_auth(op), "Idempotency-Key": "abc-123"}
+    op = seed_user(migrated_engine, Role.operator, "idem-op-1")
+    farmer = seed_farmer(migrated_engine, "+254700001002")
+    apiary = seed_apiary(migrated_engine, farmer)
+    headers = {**auth(op, Role.operator), "Idempotency-Key": "abc-123"}
+    body = _batch_body(farmer, apiary)
 
-    r1 = client.post("/v2/batches", json={"farmer_id": farmer}, headers=headers)
+    r1 = client.post("/v2/batches", json=body, headers=headers)
     assert r1.status_code == 201, r1.text
-    r2 = client.post("/v2/batches", json={"farmer_id": farmer}, headers=headers)
+    r2 = client.post("/v2/batches", json=body, headers=headers)
     assert r2.status_code == 201
     assert r1.json() == r2.json()  # identical stored response replayed
 
     with Session(migrated_engine) as s:
         assert s.execute(text("select count(*) from honey_batches")).scalar() == 1
-        assert s.execute(text("select count(*) from audit_log")).scalar() == 1
+        assert s.execute(text("select count(*) from audit_log")).scalar() == 3
 
 
 def test_same_key_different_body_conflicts(client, migrated_engine):
-    op = _seed_operator(migrated_engine, "+254700001003")
-    f1 = _seed_farmer(migrated_engine, "+254700001004")
-    f2 = _seed_farmer(migrated_engine, "+254700001005")
-    headers = {**_auth(op), "Idempotency-Key": "dup-key"}
+    op = seed_user(migrated_engine, Role.operator, "idem-op-2")
+    f1 = seed_farmer(migrated_engine, "+254700001004")
+    f2 = seed_farmer(migrated_engine, "+254700001005")
+    a1 = seed_apiary(migrated_engine, f1)
+    a2 = seed_apiary(migrated_engine, f2)
+    headers = {**auth(op, Role.operator), "Idempotency-Key": "dup-key"}
 
-    r1 = client.post("/v2/batches", json={"farmer_id": f1}, headers=headers)
-    assert r1.status_code == 201
-    r2 = client.post("/v2/batches", json={"farmer_id": f2}, headers=headers)
+    r1 = client.post("/v2/batches", json=_batch_body(f1, a1), headers=headers)
+    assert r1.status_code == 201, r1.text
+    r2 = client.post("/v2/batches", json=_batch_body(f2, a2), headers=headers)
     assert r2.status_code == 409
     assert r2.json()["code"] == "idempotency_conflict"
 
 
 def test_without_key_each_call_creates_a_batch(client, migrated_engine):
-    op = _seed_operator(migrated_engine, "+254700001006")
-    farmer = _seed_farmer(migrated_engine, "+254700001007")
-    headers = _auth(op)
+    op = seed_user(migrated_engine, Role.operator, "idem-op-3")
+    farmer = seed_farmer(migrated_engine, "+254700001007")
+    apiary = seed_apiary(migrated_engine, farmer)
+    headers = auth(op, Role.operator)
+    body = _batch_body(farmer, apiary)
 
-    assert (
-        client.post("/v2/batches", json={"farmer_id": farmer}, headers=headers).status_code == 201
-    )
-    assert (
-        client.post("/v2/batches", json={"farmer_id": farmer}, headers=headers).status_code == 201
-    )
+    assert client.post("/v2/batches", json=body, headers=headers).status_code == 201
+    assert client.post("/v2/batches", json=body, headers=headers).status_code == 201
     with Session(migrated_engine) as s:
         assert s.execute(text("select count(*) from honey_batches")).scalar() == 2

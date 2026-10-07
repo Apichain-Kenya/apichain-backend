@@ -1,4 +1,4 @@
-"""GET /v2/batches/{id}/anchor-proof and the anchor-health surface (P2-G, 09 §10).
+"""GET /v2/public/batches/{public_id}/anchor-proof and the anchor-health surface (P2-G, 09 §10).
 
 The endpoint is public: the consumer scanning a jar is not a user (04 §5.3).
 Its job is to be honest about three states — a record can be in our log but not
@@ -15,6 +15,7 @@ from app.enums import Role
 from app.models import Farmer, HoneyBatch
 from app.services import anchoring, audit_log, merkle, ots
 from tests.fakes import FakeCalendar
+from tests.helpers import public_path
 
 
 def _seed_batch(engine, *, batch_code: str = "B-TEST000001") -> int:
@@ -55,7 +56,7 @@ def _anchor_everything(engine, *, confirm_at_height: int | None = None) -> None:
 def test_a_record_not_yet_anchored_reports_pending(client, migrated_engine):
     batch_id = _seed_batch(migrated_engine)
 
-    r = client.get(f"/v2/batches/{batch_id}/anchor-proof")
+    r = client.get(public_path(migrated_engine, batch_id, "anchor-proof"))
 
     assert r.status_code == 200, r.text
     body = r.json()
@@ -72,7 +73,7 @@ def test_an_anchored_record_reports_anchored_with_a_verifiable_path(client, migr
     batch_id = _seed_batch(migrated_engine)
     _anchor_everything(migrated_engine)
 
-    body = client.get(f"/v2/batches/{batch_id}/anchor-proof").json()
+    body = client.get(public_path(migrated_engine, batch_id, "anchor-proof")).json()
 
     assert body["status"] == "anchored"
     entry = body["entries"][0]
@@ -97,7 +98,7 @@ def test_a_confirmed_record_reports_confirmed(client, migrated_engine):
     batch_id = _seed_batch(migrated_engine)
     _anchor_everything(migrated_engine, confirm_at_height=903_500)
 
-    body = client.get(f"/v2/batches/{batch_id}/anchor-proof").json()
+    body = client.get(public_path(migrated_engine, batch_id, "anchor-proof")).json()
 
     assert body["status"] == "confirmed"
     entry = body["entries"][0]
@@ -123,7 +124,7 @@ def test_a_batch_with_anchored_and_pending_records_reports_partial(client, migra
         )
         s.commit()
 
-    body = client.get(f"/v2/batches/{batch_id}/anchor-proof").json()
+    body = client.get(public_path(migrated_engine, batch_id, "anchor-proof")).json()
 
     assert body["status"] == "partial"
     assert [e["status"] for e in body["entries"]] == ["anchored", "pending"]
@@ -145,7 +146,7 @@ def test_entries_cover_every_audit_row_for_the_batch_in_order(client, migrated_e
         s.commit()
     _anchor_everything(migrated_engine)
 
-    body = client.get(f"/v2/batches/{batch_id}/anchor-proof").json()
+    body = client.get(public_path(migrated_engine, batch_id, "anchor-proof")).json()
 
     assert [e["action"] for e in body["entries"]] == [
         "batch.created",
@@ -170,23 +171,34 @@ def test_another_batchs_rows_are_not_included(client, migrated_engine):
     _seed_batch(migrated_engine, batch_code="B-OTHER00001")
     _anchor_everything(migrated_engine)
 
-    body = client.get(f"/v2/batches/{mine}/anchor-proof").json()
+    body = client.get(public_path(migrated_engine, mine, "anchor-proof")).json()
 
     assert len(body["entries"]) == 1
     assert body["batch_id"] == mine
 
 
 def test_an_unknown_batch_is_a_clean_404(client):
-    r = client.get("/v2/batches/999999/anchor-proof")
+    r = client.get(f"/v2/public/batches/{'0' * 32}/anchor-proof")
 
     assert r.status_code == 404
     assert r.json()["code"] == "batch_not_found"
 
 
+def test_a_malformed_public_id_is_invalid_input(client):
+    assert client.get("/v2/public/batches/not-a-public-id/anchor-proof").status_code == 422
+
+
+def test_the_sequential_id_route_is_gone(client, migrated_engine):
+    """A public route on the integer id lets anyone walk 1..N (P3-I review)."""
+    batch_id = _seed_batch(migrated_engine)
+
+    assert client.get(f"/v2/batches/{batch_id}/anchor-proof").status_code == 404
+
+
 def test_the_endpoint_needs_no_authentication(client, migrated_engine):
     # The consumer scanning a jar is not a user (04 §5.3).
     batch_id = _seed_batch(migrated_engine)
-    assert client.get(f"/v2/batches/{batch_id}/anchor-proof").status_code == 200
+    assert client.get(public_path(migrated_engine, batch_id, "anchor-proof")).status_code == 200
 
 
 # --- anchor health (05 §3.6: anchor lag is a metric worth having) ----------

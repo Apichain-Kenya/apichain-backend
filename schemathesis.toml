@@ -1,5 +1,18 @@
 # Schemathesis contract-test configuration (05 §6.2 guardrail 3).
 #
+# One suppressed Hypothesis health check, `filter_too_much`. It measures how
+# efficiently test data is *generated*, not whether the API is correct, and it
+# fires before any request is judged. Negative-mode generation must produce
+# values that violate the schema yet can still be sent over HTTP. For a
+# free-form header like `Idempotency-Key`, every string is valid, so nothing
+# can violate it; draws that are not Latin-1 or that contain control
+# characters cannot be sent at all; and `null` cannot travel in a header. So
+# Schemathesis discards most draws. POST /v2/batches has only a body and that
+# header to mutate, so it tripped the check on ~20% of runs: the "unexplained
+# Phase 2 intermittent", captured on PR #12 (2026-10-07). Every example that
+# does get generated is still sent and still checked in full.
+suppress-health-check = ["filter_too_much"]
+#
 # Only one narrow exemption, and it is a schema-expressiveness limit rather
 # than an app defect: bcrypt refuses a password longer than 72 **bytes**, so
 # both password-taking operations validate the UTF-8 byte length and return a

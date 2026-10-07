@@ -24,7 +24,22 @@ _bearer = HTTPBearer(auto_error=False)
 # The complete action -> allowed-roles map. Grows one line per new action.
 ACTION_ROLES: dict[str, set[Role]] = {
     "farmer.enroll": {Role.field_officer, Role.admin},
+    "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
+    # A farmer self-registers their own harvest (04 §5.3); the remaining four
+    # transitions are staff actions. Attribution for all of them lives in
+    # audit_log.actor_id/actor_role, which is what makes the single-dashboard
+    # walk safe without losing who actually acted.
+    "batch.harvest_record": {Role.farmer, Role.operator, Role.admin},
+    "batch.process_record": {Role.operator, Role.admin},
+    # No oracle contract to satisfy in v2 (01), so the lab officer signs their
+    # own audit row rather than routing through a shared oracle key (04 §5.3).
+    "batch.lab_verify": {Role.lab_officer, Role.admin},
+    # Staff-only, so no farmer can reach them and no ownership check applies
+    # (ownership.assert_acts_for_farmer guards only farmer-reachable actions).
+    # Admit a farmer here and that check becomes mandatory.
+    "batch.package": {Role.operator, Role.admin},
+    "batch.distribute": {Role.operator, Role.admin},
 }
 
 

@@ -16,8 +16,12 @@ from sqlalchemy.orm import sessionmaker
 from app.database import get_db
 from app.main import app
 
+# Keep in step with tests/conftest.py::_ALL_TABLES (child-first).
 _ALL_TABLES = (
-    "merkle_anchor, audit_log, consent_records, refresh_tokens, honey_batches, farmers, users"
+    "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
+    "codex_conformance, distribution_records, packaging_records, lab_results, "
+    "process_records, harvest_records, batch_metadata, apiary_records, "
+    "apiary_locations, honey_batches, farmers, users"
 )
 
 schema = schemathesis.openapi.from_asgi("/openapi.json", app)
