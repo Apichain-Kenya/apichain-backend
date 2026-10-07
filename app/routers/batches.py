@@ -1,15 +1,11 @@
-"""Batch creation (P1-F), the five lifecycle transitions (P3-F/G/H), and the
-two public views: anchor-proof (P2-G) and the consumer's verify (P3-I).
+"""Batch creation (P1-F) and the five lifecycle transitions (P3-F/G/H).
 
-`POST /v2/batches` is the state-changing action of the Phase 1 acceptance test.
-`GET /v2/batches/{id}/anchor-proof` is the consumer-facing half of the trust
-model: it hands out everything needed to verify a record's inclusion in the
-public anchor offline, and says honestly when a record is not anchored yet.
+Staff-facing and keyed by the internal `id`. The two anonymous consumer views
+(anchor-proof, verify) live in `routers/public.py`, keyed by the random
+`public_id`, so no public route can be walked by sequential id.
 """
 
-import base64
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, Path, Request
 from fastapi.responses import JSONResponse
@@ -35,11 +31,9 @@ from app.models import (
     User,
 )
 from app.routers._context import request_context
-from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
 from app.schemas.batches import (
     BatchCreateRequest,
     BatchResponse,
-    MetadataPublic,
     StageRecordedResponse,
 )
 from app.schemas.stages import (
@@ -49,21 +43,13 @@ from app.schemas.stages import (
     PackagingRecordRequest,
     ProcessRecordRequest,
 )
-from app.schemas.verify import (
-    BatchVerifyResponse,
-    ConformanceOut,
-    StageVerificationOut,
-    StageVerifications,
-)
 from app.services import (
-    anchor_proof,
     audit_log,
     codex_scoring,
     idempotency,
     ownership,
     stage_payloads,
     stage_writer,
-    verification,
 )
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
@@ -428,104 +414,4 @@ def record_distribution(
             handover_notes=body.handover_notes,
         ),
         build_payload=stage_payloads.distribution_record,
-    )
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    """Columns are naive UTC (matching audit_log); the wire carries the zone."""
-    return value.replace(tzinfo=UTC) if value is not None else None
-
-
-@router.get(
-    "/{batch_id}/anchor-proof",
-    response_model=AnchorProofResponse,
-    responses=error_responses(404),
-)
-def batch_anchor_proof(
-    batch_id: int = Path(ge=1, le=_MAX_INT4),
-    db: Session = Depends(get_db),
-) -> AnchorProofResponse:
-    """Public: everything needed to verify this batch's records offline.
-
-    Unauthenticated by design — the consumer scanning a jar is not a user
-    (04 §5.3). One entry per audit row, each carrying its own status, so a
-    record that exists in our log but has no public anchor yet is reported as
-    `pending` rather than as a missing field (03 §6).
-    """
-    batch = db.get(HoneyBatch, batch_id)
-    if batch is None:
-        raise APIError(404, "batch_not_found", "Batch does not exist", {"batch_id": batch_id})
-
-    entries = anchor_proof.entries_for_subject(db, subject_type="batch", subject_id=str(batch.id))
-    return AnchorProofResponse(
-        batch_id=batch.id,
-        batch_code=batch.batch_code,
-        status=anchor_proof.rollup(entries),  # type: ignore[arg-type]
-        entries=[
-            AnchorProofEntry(
-                audit_id=entry.audit_id,
-                action=entry.action,
-                row_hash=entry.row_hash.hex(),
-                status=entry.status,  # type: ignore[arg-type]
-                merkle_root=entry.anchor.merkle_root.hex() if entry.anchor else None,
-                merkle_path=(
-                    [ProofStepOut(sibling=s.sibling.hex(), position=s.position) for s in entry.path]
-                    if entry.path is not None
-                    else None
-                ),
-                anchor_target=entry.anchor.anchor_target if entry.anchor else None,
-                ots_proof=(
-                    base64.b64encode(entry.anchor.anchor_proof).decode() if entry.anchor else None
-                ),
-                anchored_at=_as_utc(entry.anchor.anchored_at) if entry.anchor else None,
-                verified_at=_as_utc(entry.anchor.verified_at) if entry.anchor else None,
-            )
-            for entry in entries
-        ],
-    )
-
-
-@router.get(
-    "/{batch_id}/verify",
-    response_model=BatchVerifyResponse,
-    responses=error_responses(404),
-)
-def verify_batch(
-    batch_id: int = Path(ge=1, le=_MAX_INT4),
-    db: Session = Depends(get_db),
-) -> BatchVerifyResponse:
-    """Public: the three-way match over every recorded stage of this batch.
-
-    Unauthenticated by design, like `anchor-proof`: the consumer scanning a jar
-    is not a user (04 §5.3). Being anonymous, it applies the privacy policy in
-    `verification.PUBLIC_REDACTIONS` (hive coordinates at 2 dp, the analyst's
-    name withheld) and publishes no hashes for a redacted block. Staff see exact
-    values in an authenticated view, never here. Reports facts only: no score,
-    no band — those mappings are the client's (03 §1, §6).
-    """
-    batch = db.get(HoneyBatch, batch_id)
-    if batch is None:
-        raise APIError(404, "batch_not_found", "Batch does not exist", {"batch_id": batch_id})
-
-    result = verification.verify_batch(db, batch)
-    conformance = None
-    if result.conformance is not None:
-        conformance = ConformanceOut.model_validate(
-            {**result.conformance, "verdict": str(result.conformance["verdict"]).lower()}
-        )
-    return BatchVerifyResponse(
-        batch_id=batch.id,
-        batch_code=batch.batch_code,
-        state=str(batch.state),
-        metadata=(
-            MetadataPublic.model_validate(result.metadata) if result.metadata is not None else None
-        ),
-        verification=StageVerifications(
-            **{
-                name: (StageVerificationOut(**vars(check)) if check is not None else None)
-                for name, check in result.blocks.items()
-            }
-        ),
-        conformance=conformance,
-        anchor_status=result.anchor_status,  # type: ignore[arg-type]
     )

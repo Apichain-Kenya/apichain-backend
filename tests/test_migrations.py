@@ -96,3 +96,38 @@ def test_downgrade_is_clean_and_upgrade_is_repeatable(migtest_db):
     # Must not fail on leftover types — proves the downgrade is truly clean.
     command.upgrade(cfg, "head")
     assert SPINE_TABLES <= _tables(migtest_db)
+
+
+def test_public_id_backfills_existing_batches(migtest_db):
+    """c41ded8b7533 adds a NOT NULL column to a table that may already have
+    rows, so it must fill them with distinct random ids rather than fail."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "4f58f6313266")
+    eng = create_engine(migtest_db.render_as_string(hide_password=False))
+    try:
+        with eng.begin() as c:
+            farmer_id = c.execute(
+                text(
+                    "insert into farmers (first_name, last_name, phone) "
+                    "values ('A', 'B', '+254700099001') returning id"
+                )
+            ).scalar_one()
+            for code in ("B-MIG0000001", "B-MIG0000002"):
+                c.execute(
+                    text(
+                        "insert into honey_batches (batch_code, farmer_id, state) "
+                        "values (:c, :f, 'CREATED')"
+                    ),
+                    {"c": code, "f": farmer_id},
+                )
+
+        command.upgrade(cfg, "head")
+
+        with eng.connect() as c:
+            ids = c.execute(text("select public_id from honey_batches")).scalars().all()
+    finally:
+        eng.dispose()
+
+    assert len(ids) == 2
+    assert len(set(ids)) == 2
+    assert all(len(i) == 32 and set(i) <= set("0123456789abcdef") for i in ids)

@@ -68,7 +68,10 @@ class ConformanceOut(BaseModel):
 
 
 class BatchVerifyResponse(BaseModel):
+    # Internal id, kept because it is inside every hashed payload anyway; the
+    # route is keyed by `public_id`, so it no longer enables enumeration.
     batch_id: int
+    public_id: str
     batch_code: str
     state: str
     # The farmer's declaration in display form (no free text).

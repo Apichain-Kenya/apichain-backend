@@ -16,6 +16,7 @@ from app.enums import Role
 from app.models import Farmer, HoneyBatch
 from app.services import anchoring, audit_log
 from tests.fakes import FakeCalendar
+from tests.helpers import public_path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "verify_anchor.py"
 
@@ -62,8 +63,8 @@ def _seed_and_anchor(engine, *, confirm_at_height: int | None = None, anchor: bo
     return batch_id
 
 
-def _bundle(client, tmp_path: Path, batch_id: int) -> Path:
-    body = client.get(f"/v2/batches/{batch_id}/anchor-proof").json()
+def _bundle(client, engine, tmp_path: Path, batch_id: int) -> Path:
+    body = client.get(public_path(engine, batch_id, "anchor-proof")).json()
     path = tmp_path / "proof.json"
     path.write_text(json.dumps(body), encoding="utf-8")
     return path
@@ -71,7 +72,7 @@ def _bundle(client, tmp_path: Path, batch_id: int) -> Path:
 
 def test_a_saved_proof_verifies_with_no_server_running(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     result = _run(bundle)
 
@@ -81,7 +82,7 @@ def test_a_saved_proof_verifies_with_no_server_running(client, migrated_engine, 
 
 def test_a_confirmed_proof_reports_its_bitcoin_block(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_222)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     result = _run(bundle)
 
@@ -91,7 +92,7 @@ def test_a_confirmed_proof_reports_its_bitcoin_block(client, migrated_engine, tm
 
 def test_a_tampered_row_hash_fails_verification(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     body = json.loads(bundle.read_text(encoding="utf-8"))
     original = body["entries"][0]["row_hash"]
@@ -107,7 +108,7 @@ def test_a_tampered_row_hash_fails_verification(client, migrated_engine, tmp_pat
 
 def test_a_swapped_proof_step_fails_verification(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     body = json.loads(bundle.read_text(encoding="utf-8"))
     step = body["entries"][0]["merkle_path"][0]
@@ -119,7 +120,7 @@ def test_a_swapped_proof_step_fails_verification(client, migrated_engine, tmp_pa
 
 def test_a_root_swapped_for_another_valid_looking_one_fails(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     body = json.loads(bundle.read_text(encoding="utf-8"))
     body["entries"][0]["merkle_root"] = "11" * 32
@@ -131,7 +132,7 @@ def test_a_root_swapped_for_another_valid_looking_one_fails(client, migrated_eng
 
 def test_an_unanchored_bundle_reports_nothing_to_verify(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine, anchor=False)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     result = _run(bundle)
 
@@ -141,7 +142,7 @@ def test_an_unanchored_bundle_reports_nothing_to_verify(client, migrated_engine,
 
 def test_a_single_audit_row_can_be_verified_on_its_own(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
     audit_id = json.loads(bundle.read_text(encoding="utf-8"))["entries"][1]["audit_id"]
 
     result = _run(bundle, "--audit-id", str(audit_id))
@@ -189,7 +190,7 @@ def _attested_commitment(bundle: Path) -> tuple[str, int]:
 
 def test_the_real_attested_commitment_verifies(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
     commitment, height = _attested_commitment(bundle)
 
     result = _run(bundle, "--block-merkle-root", commitment)
@@ -201,7 +202,7 @@ def test_the_real_attested_commitment_verifies(client, migrated_engine, tmp_path
 def test_this_batchs_merkle_root_is_not_accepted_as_a_block_root(client, migrated_engine, tmp_path):
     # The exact false positive the old comparison allowed.
     batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
     our_root = json.loads(bundle.read_text(encoding="utf-8"))["entries"][0]["merkle_root"]
 
     result = _run(bundle, "--block-merkle-root", our_root)
@@ -212,7 +213,7 @@ def test_this_batchs_merkle_root_is_not_accepted_as_a_block_root(client, migrate
 
 def test_a_wrong_block_root_is_rejected(client, migrated_engine, tmp_path):
     batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     assert _run(bundle, "--block-merkle-root", "ab" * 32).returncode == 1
 
@@ -220,7 +221,7 @@ def test_a_wrong_block_root_is_rejected(client, migrated_engine, tmp_path):
 def test_the_commitment_to_look_up_is_printed(client, migrated_engine, tmp_path):
     # Without this the user has no way to know what to check in the block.
     batch_id = _seed_and_anchor(migrated_engine, confirm_at_height=904_800)
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
     commitment, _ = _attested_commitment(bundle)
 
     assert commitment in _run(bundle).stdout
@@ -230,7 +231,7 @@ def test_supplying_a_block_root_for_a_pending_proof_fails_cleanly(
     client, migrated_engine, tmp_path
 ):
     batch_id = _seed_and_anchor(migrated_engine)  # anchored, not yet confirmed
-    bundle = _bundle(client, tmp_path, batch_id)
+    bundle = _bundle(client, migrated_engine, tmp_path, batch_id)
 
     result = _run(bundle, "--block-merkle-root", "ab" * 32)
 

@@ -1,4 +1,4 @@
-"""GET /v2/batches/{id}/verify — the consumer's three-way match (P3-I, 10 §10).
+"""GET /v2/public/batches/{public_id}/verify — the consumer's three-way match (P3-I, 10 §10).
 
 For each of the seven stage blocks:
 
@@ -22,6 +22,8 @@ candidates, so publishing the hash would let anyone brute-force the hive's
 location back out of it in minutes.
 """
 
+import re
+
 import pytest
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
@@ -36,7 +38,15 @@ from app.models import (
 )
 from app.services import stage_payloads, verification
 from app.services.canonical import compute_data_hash
-from tests.helpers import METADATA, auth, seed_apiary, seed_farmer, seed_user
+from tests.helpers import (
+    METADATA,
+    auth,
+    create_batch,
+    public_path,
+    seed_apiary,
+    seed_farmer,
+    seed_user,
+)
 from tests.test_anchor_proof_endpoint import _anchor_everything
 from tests.test_lab_verify import CLEAN_PANEL, _processed_batch
 from tests.test_package_distribute import DISTRIBUTE, PACKAGE, _distributed_batch
@@ -46,12 +56,12 @@ BLOCKS = ("apiary", "metadata", "harvest", "process", "lab", "packaging", "distr
 EXACT_COORDS = ("1.286389", "36.817223")
 
 
-def _get(client, batch_id: int, **kwargs):
-    return client.get(f"/v2/batches/{batch_id}/verify", **kwargs)
+def _get(client, engine, batch_id: int, **kwargs):
+    return client.get(public_path(engine, batch_id, "verify"), **kwargs)
 
 
-def _verify(client, batch_id: int) -> dict:
-    r = _get(client, batch_id)
+def _verify(client, engine, batch_id: int) -> dict:
+    r = _get(client, engine, batch_id)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -62,7 +72,7 @@ def _verify(client, batch_id: int) -> dict:
 def test_a_distributed_batch_matches_on_all_seven_blocks(client, migrated_engine):
     batch_id = _distributed_batch(client, migrated_engine, "+254700060001")
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     assert body["batch_id"] == batch_id
     assert body["state"] == "DISTRIBUTED"
@@ -80,7 +90,7 @@ def test_an_exact_block_is_independently_reproducible(client, migrated_engine):
     the payload shown and get the recorded hash themselves."""
     batch_id = _distributed_batch(client, migrated_engine, "+254700060002")
 
-    block = _verify(client, batch_id)["verification"]["metadata"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["metadata"]
 
     assert block["payload_precision"] == "exact"
     assert block["redacted_fields"] == []
@@ -100,7 +110,7 @@ def test_a_block_whose_withheld_fields_are_null_stays_exact(client, migrated_eng
         headers=headers,
     )
 
-    block = _verify(client, batch_id)["verification"]["process"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["process"]
 
     assert block["payload_precision"] == "exact"
     assert compute_data_hash(block["payload"]).hex() == block["recorded_hash"]
@@ -110,7 +120,7 @@ def test_anchor_status_follows_the_public_anchor(client, migrated_engine):
     batch_id = _distributed_batch(client, migrated_engine, "+254700060003")
     _anchor_everything(migrated_engine)
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     assert body["anchor_status"] == "anchored"
     assert {body["verification"][n]["anchor_status"] for n in BLOCKS} == {"anchored"}
@@ -119,7 +129,7 @@ def test_anchor_status_follows_the_public_anchor(client, migrated_engine):
 def test_the_conformance_block_reports_facts_not_a_score(client, migrated_engine):
     batch_id = _distributed_batch(client, migrated_engine, "+254700060004")
 
-    conformance = _verify(client, batch_id)["conformance"]
+    conformance = _verify(client, migrated_engine, batch_id)["conformance"]
 
     assert conformance["verdict"] == "pass"
     assert conformance["rule_set_version"] == "codex-kenya-v1"
@@ -140,7 +150,7 @@ def test_the_conformance_block_reports_facts_not_a_score(client, migrated_engine
 def test_the_metadata_summary_carries_no_free_text(client, migrated_engine):
     batch_id = _batch(client, migrated_engine, "+254700060005")
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     assert body["metadata"]["honey_type"] == "acacia"
     assert "notes" not in body["metadata"]
@@ -153,7 +163,7 @@ def test_the_metadata_summary_carries_no_free_text(client, migrated_engine):
 def test_a_batch_mid_lifecycle_reports_later_stages_as_null(client, migrated_engine):
     batch_id = _processed_batch(client, migrated_engine, "+254700060006")
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     assert body["state"] == "PROCESSED"
     for name in ("apiary", "metadata", "harvest", "process"):
@@ -177,7 +187,7 @@ def test_editing_one_stage_row_breaks_exactly_that_block(client, migrated_engine
         )
         s.commit()
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     block = body["verification"]["metadata"]
     assert block["match"] is False
@@ -196,7 +206,7 @@ def test_editing_a_redacted_block_is_still_detected(client, migrated_engine):
         )
         s.commit()
 
-    block = _verify(client, batch_id)["verification"]["harvest"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["harvest"]
 
     assert block["match"] is False
     assert block["recorded_hash"] is None and block["recomputed_hash"] is None
@@ -212,7 +222,7 @@ def test_editing_a_lab_measurement_breaks_the_lab_block(client, migrated_engine)
         s.execute(update(LabResult).where(LabResult.batch_id == batch_id).values(hmf_mg_kg=95))
         s.commit()
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     assert body["verification"]["lab"]["match"] is False
     assert body["conformance"]["verdict"] == "pass"
@@ -234,7 +244,7 @@ def test_doctoring_a_failing_panel_cannot_show_a_pass(client, migrated_engine):
         s.execute(update(LabResult).where(LabResult.batch_id == batch_id).values(hmf_mg_kg=20))
         s.commit()
 
-    body = _verify(client, batch_id)
+    body = _verify(client, migrated_engine, batch_id)
 
     assert body["verification"]["lab"]["match"] is False
     assert body["conformance"]["verdict"] == "fail"
@@ -255,7 +265,7 @@ def test_a_tampered_audit_payload_withholds_the_verdict(client, migrated_engine)
         s.execute(update(AuditLog).where(AuditLog.id == row.id).values(payload=doctored))
         s.commit()
 
-    assert _verify(client, batch_id)["conformance"] is None
+    assert _verify(client, migrated_engine, batch_id)["conformance"] is None
 
 
 def test_a_deleted_stage_row_is_a_mismatch_not_an_unreached_stage(client, migrated_engine):
@@ -266,7 +276,7 @@ def test_a_deleted_stage_row_is_a_mismatch_not_an_unreached_stage(client, migrat
         s.execute(delete(BatchMetadata).where(BatchMetadata.batch_id == batch_id))
         s.commit()
 
-    block = _verify(client, batch_id)["verification"]["metadata"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["metadata"]
 
     assert block is not None
     assert block["match"] is False
@@ -284,7 +294,7 @@ def test_a_deleted_redacted_row_still_publishes_no_hash(client, migrated_engine)
         s.execute(delete(ApiaryRecord).where(ApiaryRecord.batch_id == batch_id))
         s.commit()
 
-    block = _verify(client, batch_id)["verification"]["apiary"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["apiary"]
 
     assert block["match"] is False
     assert block["payload_precision"] == "reduced"
@@ -303,7 +313,7 @@ def test_a_stage_row_without_its_audit_row_is_a_mismatch(client, migrated_engine
         )
         s.commit()
 
-    block = _verify(client, batch_id)["verification"]["packaging"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["packaging"]
 
     assert block["match"] is False
     assert block["audit_id"] is None
@@ -317,7 +327,7 @@ def test_a_stage_row_without_its_audit_row_is_a_mismatch(client, migrated_engine
 def test_exact_coordinates_appear_nowhere_in_the_response(client, migrated_engine):
     batch_id = _distributed_batch(client, migrated_engine, "+254700060012")
 
-    r = _get(client, batch_id)
+    r = _get(client, migrated_engine, batch_id)
 
     for exact in EXACT_COORDS:
         assert exact not in r.text, exact
@@ -333,7 +343,7 @@ def test_exact_coordinates_appear_nowhere_in_the_response(client, migrated_engin
 def test_coordinates_are_reduced_to_two_places(client, migrated_engine, block, lat, lon, phone):
     batch_id = _distributed_batch(client, migrated_engine, phone)
 
-    payload_block = _verify(client, batch_id)["verification"][block]
+    payload_block = _verify(client, migrated_engine, batch_id)["verification"][block]
 
     assert payload_block["payload_precision"] == "reduced"
     assert payload_block["payload"][lat] == "-1.29"
@@ -344,7 +354,7 @@ def test_coordinates_are_reduced_to_two_places(client, migrated_engine, block, l
 def test_the_apiary_block_coarsens_altitude_and_withholds_the_apiary_id(client, migrated_engine):
     batch_id = _distributed_batch(client, migrated_engine, "+254700060023")
 
-    block = _verify(client, batch_id)["verification"]["apiary"]
+    block = _verify(client, migrated_engine, batch_id)["verification"]["apiary"]
 
     assert block["payload"]["altitude"] == "1800"  # seeded at 1795.00
     assert block["payload"]["apiary_id"] is None
@@ -354,7 +364,7 @@ def test_the_apiary_block_coarsens_altitude_and_withholds_the_apiary_id(client, 
 def test_the_analyst_name_is_withheld(client, migrated_engine):
     batch_id = _distributed_batch(client, migrated_engine, "+254700060013")
 
-    r = _get(client, batch_id)
+    r = _get(client, migrated_engine, batch_id)
     block = r.json()["verification"]["lab"]
 
     assert "J. Wanjiru" not in r.text
@@ -369,7 +379,7 @@ def test_a_redacted_block_publishes_no_hash(client, migrated_engine):
     reduced to 2 dp would let anyone recover the exact ones by brute force."""
     batch_id = _distributed_batch(client, migrated_engine, "+254700060014")
 
-    r = _get(client, batch_id)
+    r = _get(client, migrated_engine, batch_id)
     body = r.json()
 
     with Session(migrated_engine) as s:
@@ -445,7 +455,7 @@ def test_no_free_text_reaches_the_anonymous_view(client, migrated_engine):
         r = client.post(f"/v2/batches/{batch_id}/{stage}", json=body, headers=headers)
         assert r.status_code == 201, (stage, r.text)
 
-    r = _get(client, batch_id)
+    r = _get(client, migrated_engine, batch_id)
 
     assert r.status_code == 200
     for field, sentinel in sentinels.items():
@@ -458,7 +468,7 @@ def test_every_payload_field_is_classified(client, migrated_engine):
     test failure rather than a silently withheld one."""
     batch_id = _distributed_batch(client, migrated_engine, "+254700060024")
 
-    blocks = _verify(client, batch_id)["verification"]
+    blocks = _verify(client, migrated_engine, batch_id)["verification"]
 
     for name in BLOCKS:
         assert set(blocks[name]["payload"]) == set(verification.FIELD_POLICY[name]), name
@@ -484,25 +494,46 @@ def test_verify_is_public_by_design(client, migrated_engine):
     """The consumer scanning a jar is not a user (04 §5.3)."""
     batch_id = _batch(client, migrated_engine, "+254700060015")
 
-    assert _get(client, batch_id).status_code == 200
+    assert _get(client, migrated_engine, batch_id).status_code == 200
 
 
 def test_verify_ignores_a_bearer_token(client, migrated_engine):
     batch_id = _batch(client, migrated_engine, "+254700060016")
     operator = seed_user(migrated_engine, Role.operator, "op-verify")
 
-    r = _get(client, batch_id, headers=auth(operator, Role.operator))
+    r = _get(client, migrated_engine, batch_id, headers=auth(operator, Role.operator))
 
     assert r.status_code == 200
     assert "36.817223" not in r.text  # staff see exact values elsewhere, not here
 
 
-def test_an_unknown_batch_is_404(client, migrated_engine):
-    r = client.get("/v2/batches/999999/verify")
+def test_an_unknown_public_id_is_404(client, migrated_engine):
+    r = client.get(f"/v2/public/batches/{'0' * 32}/verify")
 
     assert r.status_code == 404
     assert r.json()["code"] == "batch_not_found"
 
 
-def test_an_out_of_range_batch_id_is_422(client, migrated_engine):
-    assert client.get("/v2/batches/2147483648/verify").status_code == 422
+@pytest.mark.parametrize("bad", ["1", "A" * 32, "g" * 32, "0" * 31, "0" * 33])
+def test_a_malformed_public_id_is_422(client, migrated_engine, bad):
+    assert client.get(f"/v2/public/batches/{bad}/verify").status_code == 422
+
+
+def test_the_sequential_id_route_is_gone(client, migrated_engine):
+    """A public route on the integer id lets anyone walk 1..N and scrape every
+    batch. The security review caught that in P3-I; this keeps it fixed."""
+    batch_id = _batch(client, migrated_engine, "+254700060026")
+
+    assert client.get(f"/v2/batches/{batch_id}/verify").status_code == 404
+
+
+def test_public_ids_are_random_and_returned_on_create(client, migrated_engine):
+    """The id staff print on the jar: 128 bits, lowercase hex, not derived from
+    anything sequential."""
+    first = create_batch(client, migrated_engine, phone="+254700060027")
+    second = create_batch(client, migrated_engine, phone="+254700060028")
+
+    for body in (first, second):
+        assert re.fullmatch(r"[0-9a-f]{32}", body["public_id"])
+    assert first["public_id"] != second["public_id"]
+    assert client.get(f"/v2/public/batches/{first['public_id']}/verify").status_code == 200

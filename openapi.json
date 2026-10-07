@@ -214,6 +214,10 @@
             "title": "Entries",
             "type": "array"
           },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
           "status": {
             "enum": [
               "pending",
@@ -227,6 +231,7 @@
         },
         "required": [
           "batch_id",
+          "public_id",
           "batch_code",
           "status",
           "entries"
@@ -556,6 +561,10 @@
             "title": "Id",
             "type": "integer"
           },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -563,6 +572,7 @@
         },
         "required": [
           "id",
+          "public_id",
           "batch_code",
           "farmer_id",
           "state"
@@ -610,6 +620,10 @@
               }
             ]
           },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -620,6 +634,7 @@
         },
         "required": [
           "batch_id",
+          "public_id",
           "batch_code",
           "state",
           "metadata",
@@ -2144,64 +2159,6 @@
         ]
       }
     },
-    "/v2/batches/{batch_id}/anchor-proof": {
-      "get": {
-        "description": "Public: everything needed to verify this batch's records offline.\n\nUnauthenticated by design \u2014 the consumer scanning a jar is not a user\n(04 \u00a75.3). One entry per audit row, each carrying its own status, so a\nrecord that exists in our log but has no public anchor yet is reported as\n`pending` rather than as a missing field (03 \u00a76).",
-        "operationId": "batch_anchor_proof_v2_batches__batch_id__anchor_proof_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "batch_id",
-            "required": true,
-            "schema": {
-              "maximum": 2147483647,
-              "minimum": 1,
-              "title": "Batch Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnchorProofResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "description": "Malformed request body"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Batch Anchor Proof",
-        "tags": [
-          "batches"
-        ]
-      }
-    },
     "/v2/batches/{batch_id}/distribute": {
       "post": {
         "description": "S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so\nevery transition endpoint refuses a distributed batch, this one included.",
@@ -2797,64 +2754,6 @@
         ]
       }
     },
-    "/v2/batches/{batch_id}/verify": {
-      "get": {
-        "description": "Public: the three-way match over every recorded stage of this batch.\n\nUnauthenticated by design, like `anchor-proof`: the consumer scanning a jar\nis not a user (04 \u00a75.3). Being anonymous, it applies the privacy policy in\n`verification.PUBLIC_REDACTIONS` (hive coordinates at 2 dp, the analyst's\nname withheld) and publishes no hashes for a redacted block. Staff see exact\nvalues in an authenticated view, never here. Reports facts only: no score,\nno band \u2014 those mappings are the client's (03 \u00a71, \u00a76).",
-        "operationId": "verify_batch_v2_batches__batch_id__verify_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "batch_id",
-            "required": true,
-            "schema": {
-              "maximum": 2147483647,
-              "minimum": 1,
-              "title": "Batch Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BatchVerifyResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "description": "Malformed request body"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Verify Batch",
-        "tags": [
-          "batches"
-        ]
-      }
-    },
     "/v2/farmers": {
       "post": {
         "operationId": "enroll_farmer_v2_farmers_post",
@@ -2971,6 +2870,124 @@
         "summary": "Ping",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/v2/public/batches/{public_id}/anchor-proof": {
+      "get": {
+        "description": "Everything needed to verify this batch's records offline.\n\nOne entry per audit row, each carrying its own status, so a record that\nexists in our log but has no public anchor yet is reported as `pending`\nrather than as a missing field (03 \u00a76).",
+        "operationId": "batch_anchor_proof_v2_public_batches__public_id__anchor_proof_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorProofResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch Anchor Proof",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v2/public/batches/{public_id}/verify": {
+      "get": {
+        "description": "The three-way match over every recorded stage of this batch.\n\nBeing anonymous, it applies `verification.FIELD_POLICY` (hive coordinates\nat 2 dp, altitude at 100 m, free text and the analyst's name withheld) and\npublishes no hashes for a redacted block. Staff see exact values in an\nauthenticated view, never here. Reports facts only: no score, no band \u2014\nthose mappings are the client's (03 \u00a71, \u00a76).",
+        "operationId": "verify_batch_v2_public_batches__public_id__verify_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Batch",
+        "tags": [
+          "public"
         ]
       }
     }

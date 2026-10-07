@@ -68,6 +68,8 @@ class BatchResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # The jar QR identifier: what staff print, and the key of both public views.
+    public_id: str
     batch_code: str
     farmer_id: int
     state: str

@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.enums import Role
-from app.models import ApiaryLocation, Farmer, User
+from app.models import ApiaryLocation, Farmer, HoneyBatch, User
 from app.services import security
 
 # A valid metadata block. Tests that care about one field spread over this
@@ -106,3 +106,11 @@ def create_batch(
     response = client.post("/v2/batches", json=body, headers=headers or auth(actor, actor_role))
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def public_path(engine, batch_id: int, view: str) -> str:
+    """The anonymous URL for a batch: keyed by its random `public_id`, never by
+    the sequential id (P3-I)."""
+    with Session(engine) as s:
+        public_id = s.get(HoneyBatch, batch_id).public_id
+    return f"/v2/public/batches/{public_id}/{view}"
