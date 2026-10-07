@@ -570,6 +570,157 @@
         "title": "BatchResponse",
         "type": "object"
       },
+      "BatchVerifyResponse": {
+        "properties": {
+          "anchor_status": {
+            "enum": [
+              "pending",
+              "partial",
+              "anchored",
+              "confirmed"
+            ],
+            "title": "Anchor Status",
+            "type": "string"
+          },
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "integer"
+          },
+          "conformance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConformanceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/StageVerifications"
+          }
+        },
+        "required": [
+          "batch_id",
+          "batch_code",
+          "state",
+          "metadata",
+          "verification",
+          "conformance",
+          "anchor_status"
+        ],
+        "title": "BatchVerifyResponse",
+        "type": "object"
+      },
+      "ConformanceOut": {
+        "description": "The Codex/KEBS verdict re-derived from the lab row now, under the rule\nset recorded with it. Every limit and its basis travel with the result, so\na reader never needs to know which rules were in force.",
+        "properties": {
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ConformanceParameterOut"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "rule_set_version": {
+            "title": "Rule Set Version",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail",
+              "incomplete"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_set_version",
+          "verdict",
+          "parameters"
+        ],
+        "title": "ConformanceOut",
+        "type": "object"
+      },
+      "ConformanceParameterOut": {
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "comparator": {
+            "enum": [
+              "<=",
+              ">="
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "string"
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "parameter": {
+            "title": "Parameter",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "not_measured"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameter",
+          "measured",
+          "unit",
+          "comparator",
+          "limit",
+          "basis",
+          "status"
+        ],
+        "title": "ConformanceParameterOut",
+        "type": "object"
+      },
       "DistributionRecordRequest": {
         "description": "S5, terminal.",
         "properties": {
@@ -1092,6 +1243,54 @@
         "title": "LogoutRequest",
         "type": "object"
       },
+      "MetadataPublic": {
+        "properties": {
+          "apiary_management_method": {
+            "title": "Apiary Management Method",
+            "type": "string"
+          },
+          "expected_yield_kg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Expected Yield Kg",
+            "type": "string"
+          },
+          "harvest_window_end": {
+            "format": "date",
+            "title": "Harvest Window End",
+            "type": "string"
+          },
+          "harvest_window_start": {
+            "format": "date",
+            "title": "Harvest Window Start",
+            "type": "string"
+          },
+          "honey_type": {
+            "title": "Honey Type",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "honey_type",
+          "expected_yield_kg",
+          "harvest_window_start",
+          "harvest_window_end",
+          "apiary_management_method",
+          "notes"
+        ],
+        "title": "MetadataPublic",
+        "type": "object"
+      },
       "PackagingRecordRequest": {
         "description": "S4. One QR per batch, so v1's per-jar `qr_codes` is gone; `unit_count`\nalready equals the jar count.",
         "properties": {
@@ -1261,6 +1460,189 @@
           "payload_hash"
         ],
         "title": "StageRecordedResponse",
+        "type": "object"
+      },
+      "StageVerificationOut": {
+        "description": "One stage of the three-way match.\n\n`payload` is the canonical pre-image as the stage row stands now. When\n`payload_precision` is `exact`, hashing it reproduces `recomputed_hash`.\nWhen it is `reduced`, the fields in `redacted_fields` were coarsened or\nwithheld for privacy and **both hashes are omitted**, because they commit\nto the exact values; `match` is then the server's own comparison.",
+        "properties": {
+          "anchor_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "anchored",
+                  "confirmed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Status"
+          },
+          "audit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Id"
+          },
+          "match": {
+            "title": "Match",
+            "type": "boolean"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "payload_precision": {
+            "enum": [
+              "exact",
+              "reduced"
+            ],
+            "title": "Payload Precision",
+            "type": "string"
+          },
+          "recomputed_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recomputed Hash"
+          },
+          "recorded_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded Hash"
+          },
+          "redacted_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Redacted Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "audit_id",
+          "payload",
+          "recomputed_hash",
+          "recorded_hash",
+          "match",
+          "anchor_status",
+          "payload_precision",
+          "redacted_fields"
+        ],
+        "title": "StageVerificationOut",
+        "type": "object"
+      },
+      "StageVerifications": {
+        "description": "`null` means the batch has not reached that stage yet.",
+        "properties": {
+          "apiary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "distribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "harvest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lab": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packaging": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "process": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "apiary",
+          "metadata",
+          "harvest",
+          "process",
+          "lab",
+          "packaging",
+          "distribution"
+        ],
+        "title": "StageVerifications",
         "type": "object"
       },
       "StatusResponse": {
@@ -2421,6 +2803,64 @@
           }
         ],
         "summary": "Record Process",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}/verify": {
+      "get": {
+        "description": "Public: the three-way match over every recorded stage of this batch.\n\nUnauthenticated by design, like `anchor-proof`: the consumer scanning a jar\nis not a user (04 \u00a75.3). Being anonymous, it applies the privacy policy in\n`verification.PUBLIC_REDACTIONS` (hive coordinates at 2 dp, the analyst's\nname withheld) and publishes no hashes for a redacted block. Staff see exact\nvalues in an authenticated view, never here. Reports facts only: no score,\nno band \u2014 those mappings are the client's (03 \u00a71, \u00a76).",
+        "operationId": "verify_batch_v2_batches__batch_id__verify_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Batch",
         "tags": [
           "batches"
         ]

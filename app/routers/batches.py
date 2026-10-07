@@ -1,5 +1,5 @@
 """Batch creation (P1-F), the five lifecycle transitions (P3-F/G/H), and the
-public anchor-proof view (P2-G).
+two public views: anchor-proof (P2-G) and the consumer's verify (P3-I).
 
 `POST /v2/batches` is the state-changing action of the Phase 1 acceptance test.
 `GET /v2/batches/{id}/anchor-proof` is the consumer-facing half of the trust
@@ -36,13 +36,24 @@ from app.models import (
 )
 from app.routers._context import request_context
 from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
-from app.schemas.batches import BatchCreateRequest, BatchResponse, StageRecordedResponse
+from app.schemas.batches import (
+    BatchCreateRequest,
+    BatchResponse,
+    MetadataPublic,
+    StageRecordedResponse,
+)
 from app.schemas.stages import (
     DistributionRecordRequest,
     HarvestRecordRequest,
     LabResultRequest,
     PackagingRecordRequest,
     ProcessRecordRequest,
+)
+from app.schemas.verify import (
+    BatchVerifyResponse,
+    ConformanceOut,
+    StageVerificationOut,
+    StageVerifications,
 )
 from app.services import (
     anchor_proof,
@@ -52,6 +63,7 @@ from app.services import (
     ownership,
     stage_payloads,
     stage_writer,
+    verification,
 )
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
@@ -276,16 +288,7 @@ def _score_and_record_conformance(db: Session, row: LabResult) -> dict[str, obje
     surprise us. Anything that could raise here would raise *after* the stage
     row exists and would risk doing so after the append.
     """
-    report = codex_scoring.evaluate(
-        codex_scoring.LabMeasurements(
-            moisture_pct=row.moisture_pct,
-            fructose_glucose_g_100g=row.fructose_glucose_g_100g,
-            sucrose_g_100g=row.sucrose_g_100g,
-            hmf_mg_kg=row.hmf_mg_kg,
-            diastase_schade=row.diastase_schade,
-            free_acidity_meq_kg=row.free_acidity_meq_kg,
-        )
-    )
+    report = codex_scoring.evaluate(codex_scoring.LabMeasurements.from_row(row))
     # NULL for a parameter the lab did not report — distinct from False.
     passed = {
         p.parameter: (None if p.status == "not_measured" else p.status == "pass")
@@ -479,4 +482,51 @@ def batch_anchor_proof(
             )
             for entry in entries
         ],
+    )
+
+
+@router.get(
+    "/{batch_id}/verify",
+    response_model=BatchVerifyResponse,
+    responses=error_responses(404),
+)
+def verify_batch(
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+) -> BatchVerifyResponse:
+    """Public: the three-way match over every recorded stage of this batch.
+
+    Unauthenticated by design, like `anchor-proof`: the consumer scanning a jar
+    is not a user (04 §5.3). Being anonymous, it applies the privacy policy in
+    `verification.PUBLIC_REDACTIONS` (hive coordinates at 2 dp, the analyst's
+    name withheld) and publishes no hashes for a redacted block. Staff see exact
+    values in an authenticated view, never here. Reports facts only: no score,
+    no band — those mappings are the client's (03 §1, §6).
+    """
+    batch = db.get(HoneyBatch, batch_id)
+    if batch is None:
+        raise APIError(404, "batch_not_found", "Batch does not exist", {"batch_id": batch_id})
+
+    result = verification.verify_batch(db, batch)
+    conformance = None
+    if result.conformance is not None:
+        as_payload = codex_scoring.as_payload(result.conformance)
+        conformance = ConformanceOut.model_validate(
+            {**as_payload, "verdict": as_payload["verdict"].lower()}
+        )
+    return BatchVerifyResponse(
+        batch_id=batch.id,
+        batch_code=batch.batch_code,
+        state=str(batch.state),
+        metadata=(
+            MetadataPublic.model_validate(result.metadata) if result.metadata is not None else None
+        ),
+        verification=StageVerifications(
+            **{
+                name: (StageVerificationOut(**vars(check)) if check is not None else None)
+                for name, check in result.blocks.items()
+            }
+        ),
+        conformance=conformance,
+        anchor_status=result.anchor_status,  # type: ignore[arg-type]
     )

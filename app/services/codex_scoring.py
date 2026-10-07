@@ -96,6 +96,13 @@ class LabMeasurements:
     diastase_schade: Decimal | float | None = None
     free_acidity_meq_kg: Decimal | float | None = None
 
+    @classmethod
+    def from_row(cls, row: Any) -> "LabMeasurements":
+        """Read the six measurements off a `lab_results` row (or anything with
+        the same attribute names). One constructor for both the write path and
+        `/verify`'s recomputation, so the two cannot drift apart."""
+        return cls(**{f: getattr(row, f) for f in cls.__dataclass_fields__})
+
 
 @dataclass(frozen=True, slots=True)
 class ParameterResult:
