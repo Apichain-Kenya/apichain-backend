@@ -24,12 +24,14 @@ mismatch. A block is `None` only when neither exists, i.e. the batch has
 honestly not got that far.
 
 **Privacy (03 §8.1, 10 D11; extended by Ian on 2026-10-07).** `/verify` is the
-anonymous jar-scan view, so every PII-tagged column in a stage payload has an
-explicit public policy in `PUBLIC_REDACTIONS`, and a test pins that the policy
-covers every tag, so a newly tagged column cannot leak by default. A redacted
-block publishes **no hashes**: the hash commits to the exact values, and a
-2 dp cell contains only ~10^8 six-dp coordinate candidates, so the hash next to
-the reduced values would let anyone brute-force the hive's location back out.
+anonymous jar-scan view, so every field of every stage payload is classified
+in `FIELD_POLICY` as public, reduced or withheld, failing closed on anything
+unlisted. Hive coordinates go to 2 dp, altitude to 100 m, and free text, the
+analyst's name and the transport reference are withheld. A block whose public
+form differs from its exact pre-image publishes **no hashes**: the hash
+commits to the exact values, and a 2 dp cell contains only ~10^8 six-dp
+coordinate candidates, so the hash next to the reduced values would let anyone
+brute-force the hive's location back out.
 The server still compares, and reports the result as `match`.
 """
 
@@ -80,21 +82,90 @@ AUDIT_ACTIONS: Mapping[str, str] = {
     "distribution": "batch.distributed",
 }
 
-Redaction = Literal["reduce_2dp", "withhold"]
+Rule = Literal["public", "reduce_2dp", "round_100", "withhold"]
 
-# What the anonymous view does with each PII-tagged payload field.
-PUBLIC_REDACTIONS: Mapping[str, Mapping[str, Redaction]] = {
-    # Exact hive location: theft risk and sensitive data under the KDPA.
-    # 2 dp is ~1.1 km, locality precision (03 §8.1).
-    "apiary": {"latitude": "reduce_2dp", "longitude": "reduce_2dp"},
-    # Harvest GPS is the hive location again; same treatment.
-    "harvest": {"gps_lat": "reduce_2dp", "gps_lon": "reduce_2dp"},
-    # A named person. The laboratory and certificate number stay public, so a
-    # consumer can still check the result with the lab.
-    "lab": {"analyst_name": "withhold"},
+# Every field of every public payload, classified. Fail-closed: a key a
+# builder emits that is not listed here is withheld, and a test asserts each
+# block's payload keys equal its policy keys, so a new column is a visible
+# decision rather than a silent publication. Classified per field rather than
+# by PII tag because free text and references carry personal data whatever the
+# column is tagged (Ian, 2026-10-07).
+FIELD_POLICY: Mapping[str, Mapping[str, Rule]] = {
+    "apiary": {
+        "batch_id": "public",
+        # Internal FK; links batches from one apiary to each other.
+        "apiary_id": "withhold",
+        # Exact hive location: theft risk and sensitive data under the KDPA.
+        # 2 dp is ~1.1 km, locality precision (03 §8.1, D11).
+        "latitude": "reduce_2dp",
+        "longitude": "reduce_2dp",
+        # Centimetre altitude inside a 1.1 km cell narrows hilly terrain to a
+        # contour line; 100 m keeps the fact without the fix.
+        "altitude": "round_100",
+        "vegetation_type": "public",
+        "hive_count": "public",
+    },
+    "metadata": {
+        "batch_id": "public",
+        "honey_type": "public",
+        "expected_yield_kg": "public",
+        "harvest_window_start": "public",
+        "harvest_window_end": "public",
+        "apiary_management_method": "public",
+        "recorded_at": "public",
+    },
+    "harvest": {
+        "batch_id": "public",
+        "harvest_date": "public",
+        "quantity_kg": "public",
+        "hive_ids": "public",
+        # The hive location again; same treatment as the apiary.
+        "gps_lat": "reduce_2dp",
+        "gps_lon": "reduce_2dp",
+        "notes": "withhold",
+    },
+    "process": {
+        "batch_id": "public",
+        "extraction_method": "public",
+        "moisture_content": "public",
+        "handling_notes": "withhold",
+    },
+    "lab": {
+        "batch_id": "public",
+        "moisture_pct": "public",
+        "fructose_glucose_g_100g": "public",
+        "sucrose_g_100g": "public",
+        "hmf_mg_kg": "public",
+        "diastase_schade": "public",
+        "free_acidity_meq_kg": "public",
+        "pollen_density": "public",
+        # The laboratory and certificate number stay public so a consumer can
+        # check the result with the lab; the named analyst does not.
+        "laboratory_name": "public",
+        "analyst_name": "withhold",
+        "certificate_number": "public",
+        "notes": "withhold",
+        "tested_at": "public",
+        # Merged into the lab pre-image by P3-G, not emitted by the builder.
+        "conformance": "public",
+    },
+    "packaging": {
+        "batch_id": "public",
+        "unit_count": "public",
+        "jar_ids": "public",
+        "notes": "withhold",
+    },
+    "distribution": {
+        "batch_id": "public",
+        "retailer_name": "public",
+        # Typically a vehicle plate or a driver.
+        "transport_reference": "withhold",
+        "handover_notes": "withhold",
+    },
 }
 
 _TWO_PLACES = Decimal("0.01")
+_HUNDRED = Decimal(100)
 
 
 @dataclass(frozen=True)
@@ -121,28 +192,35 @@ class BatchVerification:
     anchor_status: str
 
 
-def _reduce(value: Any) -> str | None:
+def _reduce_2dp(value: Any) -> str | None:
     if value is None:
         return None
     return str(Decimal(str(value)).quantize(_TWO_PLACES))
 
 
-_APPLY: Mapping[Redaction, Callable[[Any], Any]] = {
-    "reduce_2dp": _reduce,
+def _round_100(value: Any) -> str | None:
+    if value is None:
+        return None
+    # Not quantize(Decimal("1E2")), which renders as "1.8E+3".
+    return f"{(Decimal(str(value)) / _HUNDRED).quantize(Decimal(1)) * _HUNDRED:f}"
+
+
+_APPLY: Mapping[Rule, Callable[[Any], Any]] = {
+    "public": lambda value: value,
+    "reduce_2dp": _reduce_2dp,
+    "round_100": _round_100,
     "withhold": lambda _value: None,
 }
 
 
-def _redact(name: str, payload: dict[str, Any] | None) -> tuple[dict[str, Any] | None, list[str]]:
-    policy = PUBLIC_REDACTIONS.get(name, {})
-    if not policy:
-        return payload, []
-    if payload is None:
-        return None, list(policy)
-    public = dict(payload)
-    for field, rule in policy.items():
-        public[field] = _APPLY[rule](public.get(field))
-    return public, list(policy)
+def _public_form(name: str, payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """The payload as the anonymous view may show it, and which fields that
+    changed. Only fields whose value actually changed are listed, so a block
+    whose withheld fields happen to be null stays exact and reproducible."""
+    policy = FIELD_POLICY[name]
+    public = {key: _APPLY[policy.get(key, "withhold")](value) for key, value in payload.items()}
+    changed = [key for key in payload if public[key] != payload[key]]
+    return public, changed
 
 
 def _lab_payload(row: LabResult, conformance: CodexConformance | None) -> dict[str, Any] | None:
@@ -227,7 +305,14 @@ def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
             and recomputed == recorded_hash
         )
 
-        public_payload, redacted = _redact(name, payload)
+        if payload is not None:
+            public_payload, redacted = _public_form(name, payload)
+        else:
+            # Deleted row: nothing to compare against, so fall back to the
+            # static policy. Comparing None to None would call the block exact
+            # and publish a recorded hash over values that are never shown.
+            public_payload = None
+            redacted = [k for k, rule in FIELD_POLICY[name].items() if rule != "public"]
         reduced = bool(redacted)
         blocks[name] = StageCheck(
             audit_id=audit_id,

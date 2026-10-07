@@ -487,7 +487,7 @@
         "type": "object"
       },
       "BatchMetadataInput": {
-        "description": "What the farmer declares about a batch at creation \u2014 the S0 pre-image.\n\n`notes` is carried so `/verify` can show it and is deliberately outside the\ncanonical payload, so fixing a typo cannot invalidate anchored history\n(v1 Sprint 8; see `stage_payloads.batch_metadata`).",
+        "description": "What the farmer declares about a batch at creation \u2014 the S0 pre-image.\n\n`notes` is stored but deliberately outside the canonical payload, so fixing\na typo cannot invalidate anchored history (v1 Sprint 8; see\n`stage_payloads.batch_metadata`). It is not shown on the anonymous\n`/verify` view: free text is withheld there (`verification.FIELD_POLICY`).",
         "properties": {
           "apiary_management_method": {
             "$ref": "#/components/schemas/ApiaryManagementMethod"
@@ -1244,6 +1244,7 @@
         "type": "object"
       },
       "MetadataPublic": {
+        "description": "The farmer's declaration as the anonymous `/verify` view shows it.\n\nNo `notes`: free text can carry personal data whatever it was meant for,\nand this view is broadcast to anyone who scans a jar.",
         "properties": {
           "apiary_management_method": {
             "title": "Apiary Management Method",
@@ -1267,17 +1268,6 @@
           "honey_type": {
             "title": "Honey Type",
             "type": "string"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
           }
         },
         "required": [
@@ -1285,8 +1275,7 @@
           "expected_yield_kg",
           "harvest_window_start",
           "harvest_window_end",
-          "apiary_management_method",
-          "notes"
+          "apiary_management_method"
         ],
         "title": "MetadataPublic",
         "type": "object"

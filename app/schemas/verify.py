@@ -71,8 +71,7 @@ class BatchVerifyResponse(BaseModel):
     batch_id: int
     batch_code: str
     state: str
-    # The farmer's declaration, including `notes`, which is deliberately
-    # outside the hashed metadata payload (v1 Sprint 8).
+    # The farmer's declaration in display form (no free text).
     metadata: MetadataPublic | None
     verification: StageVerifications
     conformance: ConformanceOut | None

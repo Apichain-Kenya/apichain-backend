@@ -29,9 +29,10 @@ class ApiaryManagementMethod(enum.StrEnum):
 class BatchMetadataInput(BaseModel):
     """What the farmer declares about a batch at creation — the S0 pre-image.
 
-    `notes` is carried so `/verify` can show it and is deliberately outside the
-    canonical payload, so fixing a typo cannot invalidate anchored history
-    (v1 Sprint 8; see `stage_payloads.batch_metadata`).
+    `notes` is stored but deliberately outside the canonical payload, so fixing
+    a typo cannot invalidate anchored history (v1 Sprint 8; see
+    `stage_payloads.batch_metadata`). It is not shown on the anonymous
+    `/verify` view: free text is withheld there (`verification.FIELD_POLICY`).
     """
 
     honey_type: HoneyType
@@ -85,6 +86,12 @@ class StageRecordedResponse(BaseModel):
 
 
 class MetadataPublic(BaseModel):
+    """The farmer's declaration as the anonymous `/verify` view shows it.
+
+    No `notes`: free text can carry personal data whatever it was meant for,
+    and this view is broadcast to anyone who scans a jar.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     honey_type: str
@@ -92,4 +99,3 @@ class MetadataPublic(BaseModel):
     harvest_window_start: dt.date
     harvest_window_end: dt.date
     apiary_management_method: str
-    notes: str | None
