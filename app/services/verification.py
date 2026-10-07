@@ -55,7 +55,6 @@ from app.models import (
 )
 from app.services import anchor_proof, codex_scoring, stage_payloads
 from app.services.canonical import compute_data_hash
-from app.services.codex_scoring import ConformanceReport
 
 # Block name -> the stage table holding its pre-image. Keys equal
 # `stage_payloads.BUILDERS`; a test pins that.
@@ -115,7 +114,9 @@ class StageCheck:
 @dataclass(frozen=True)
 class BatchVerification:
     blocks: dict[str, StageCheck | None]
-    conformance: ConformanceReport | None
+    # The witnessed verdict, in `codex_scoring.as_payload` shape (see
+    # `_witnessed_conformance`), or None if there is none to trust.
+    conformance: dict[str, Any] | None
     metadata: BatchMetadata | None
     anchor_status: str
 
@@ -144,24 +145,40 @@ def _redact(name: str, payload: dict[str, Any] | None) -> tuple[dict[str, Any] |
     return public, list(policy)
 
 
-def _lab_payload(
-    row: LabResult, conformance: CodexConformance | None
-) -> tuple[dict[str, Any] | None, ConformanceReport | None]:
+def _lab_payload(row: LabResult, conformance: CodexConformance | None) -> dict[str, Any] | None:
     """The lab pre-image embeds the verdict (P3-G), so recomputing it re-runs
     the scorer — under the rule set *recorded* on the row, never the current
     default, or every old verdict would mismatch the day the default moved."""
     if conformance is None or conformance.rule_set_version not in codex_scoring.RULES:
         # Cannot reconstruct what was hashed: report a mismatch, not a 500.
-        return None, None
+        return None
     report = codex_scoring.evaluate(
         codex_scoring.LabMeasurements.from_row(row),
         rule_set_version=conformance.rule_set_version,
     )
-    payload = {
-        **stage_payloads.lab_result(row),
-        "conformance": codex_scoring.as_payload(report),
-    }
-    return payload, report
+    return {**stage_payloads.lab_result(row), "conformance": codex_scoring.as_payload(report)}
+
+
+def _witnessed_conformance(
+    audit_rows: list[tuple[int, bytes, dict[str, Any]]],
+) -> dict[str, Any] | None:
+    """The verdict as anchored, not as re-derivable from the lab row now.
+
+    Re-deriving it from the current row would let a DB edit that turns a
+    failing panel into a passing one display `pass` beside a lab block that
+    reports `match: false` — and a client rendering the verdict on its own
+    would show the doctored result. So the verdict comes from the audit row's
+    payload, and only after that JSONB copy is checked against the row's own
+    `payload_hash`, which the chain and the anchor cover. The sub-dict carries
+    no PII (rule set, verdict, parameters), so it is safe to publish whole.
+    """
+    if len(audit_rows) != 1:
+        return None
+    _, payload_hash, payload = audit_rows[0]
+    if compute_data_hash(payload) != payload_hash:
+        return None
+    conformance = payload.get("conformance")
+    return conformance if isinstance(conformance, dict) else None
 
 
 def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
@@ -169,21 +186,20 @@ def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
     entries = anchor_proof.entries_for_subject(db, subject_type="batch", subject_id=subject_id)
     status_of = {entry.audit_id: entry.status for entry in entries}
 
-    recorded: dict[str, list[tuple[int, bytes]]] = {}
-    for audit_id, action, payload_hash in db.execute(
-        select(AuditLog.id, AuditLog.action, AuditLog.payload_hash)
+    recorded: dict[str, list[tuple[int, bytes, dict[str, Any]]]] = {}
+    for audit_id, action, payload_hash, payload_json in db.execute(
+        select(AuditLog.id, AuditLog.action, AuditLog.payload_hash, AuditLog.payload)
         .where(AuditLog.subject_type == "batch")
         .where(AuditLog.subject_id == subject_id)
         .order_by(AuditLog.id.asc())
     ).all():
-        recorded.setdefault(action, []).append((audit_id, payload_hash))
+        recorded.setdefault(action, []).append((audit_id, payload_hash, payload_json))
 
     conformance_row = db.execute(
         select(CodexConformance).where(CodexConformance.batch_id == batch.id)
     ).scalar_one_or_none()
 
     blocks: dict[str, StageCheck | None] = {}
-    report: ConformanceReport | None = None
     metadata_row: BatchMetadata | None = None
     for name, model in STAGE_MODELS.items():
         row = db.execute(select(model).where(model.batch_id == batch.id)).scalar_one_or_none()
@@ -195,14 +211,14 @@ def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
         payload: dict[str, Any] | None = None
         if row is not None:
             if name == "lab":
-                payload, report = _lab_payload(row, conformance_row)
+                payload = _lab_payload(row, conformance_row)
             else:
                 payload = stage_payloads.BUILDERS[name](row)
             if name == "metadata":
                 metadata_row = row
 
         recomputed = compute_data_hash(payload) if payload is not None else None
-        audit_id, recorded_hash = audit_rows[0] if audit_rows else (None, None)
+        audit_id, recorded_hash = audit_rows[0][:2] if audit_rows else (None, None)
         # More than one audit row for a once-only stage is itself an anomaly.
         match = (
             recomputed is not None
@@ -226,7 +242,7 @@ def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
 
     return BatchVerification(
         blocks=blocks,
-        conformance=report,
+        conformance=_witnessed_conformance(recorded.get(AUDIT_ACTIONS["lab"], [])),
         metadata=metadata_row,
         anchor_status=anchor_proof.rollup(entries),
     )

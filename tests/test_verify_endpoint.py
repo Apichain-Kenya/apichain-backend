@@ -36,7 +36,7 @@ from app.services import stage_payloads, verification
 from app.services.canonical import compute_data_hash
 from tests.helpers import auth, seed_user
 from tests.test_anchor_proof_endpoint import _anchor_everything
-from tests.test_lab_verify import _processed_batch
+from tests.test_lab_verify import CLEAN_PANEL, _processed_batch
 from tests.test_package_distribute import _distributed_batch
 from tests.test_transitions_endpoints import _batch
 
@@ -184,7 +184,9 @@ def test_editing_a_redacted_block_is_still_detected(client, migrated_engine):
 
 def test_editing_a_lab_measurement_breaks_the_lab_block(client, migrated_engine):
     """The lab payload embeds the verdict, so the recomputation re-runs the
-    scorer under the *recorded* rule set. A changed measurement changes both."""
+    scorer under the *recorded* rule set, and a changed measurement breaks it.
+    The verdict shown is still the witnessed one, not one re-derived from the
+    edited row."""
     batch_id = _distributed_batch(client, migrated_engine, "+254700060009")
     with Session(migrated_engine) as s:
         s.execute(update(LabResult).where(LabResult.batch_id == batch_id).values(hmf_mg_kg=95))
@@ -193,7 +195,47 @@ def test_editing_a_lab_measurement_breaks_the_lab_block(client, migrated_engine)
     body = _verify(client, batch_id)
 
     assert body["verification"]["lab"]["match"] is False
+    assert body["conformance"]["verdict"] == "pass"
+
+
+def test_doctoring_a_failing_panel_cannot_show_a_pass(client, migrated_engine):
+    """The case /verify exists for: someone with DB access edits a failing
+    panel into a passing one. The lab block must break, and the verdict shown
+    must stay the anchored `fail`."""
+    batch_id = _processed_batch(client, migrated_engine, "+254700060017")
+    lab = auth(seed_user(migrated_engine, Role.lab_officer, "lab-doctor"), Role.lab_officer)
+    r = client.post(
+        f"/v2/batches/{batch_id}/lab-verify",
+        json={**CLEAN_PANEL, "hmf_mg_kg": "95.00"},
+        headers=lab,
+    )
+    assert r.status_code == 201, r.text
+    with Session(migrated_engine) as s:
+        s.execute(update(LabResult).where(LabResult.batch_id == batch_id).values(hmf_mg_kg=20))
+        s.commit()
+
+    body = _verify(client, batch_id)
+
+    assert body["verification"]["lab"]["match"] is False
     assert body["conformance"]["verdict"] == "fail"
+
+
+def test_a_tampered_audit_payload_withholds_the_verdict(client, migrated_engine):
+    """The verdict is read from the audit row's JSONB, so that copy is checked
+    against the row's own payload_hash first. An edited copy shows nothing."""
+    batch_id = _distributed_batch(client, migrated_engine, "+254700060018")
+    with Session(migrated_engine) as s:
+        row = s.execute(
+            select(AuditLog).where(
+                AuditLog.subject_id == str(batch_id), AuditLog.action == "batch.lab_verified"
+            )
+        ).scalar_one()
+        doctored = dict(row.payload)
+        doctored["conformance"] = {**doctored["conformance"], "verdict": "FAIL"}
+        s.execute(update(AuditLog).where(AuditLog.id == row.id).values(payload=doctored))
+        s.commit()
+
+    assert _verify(client, batch_id)["conformance"] is None
 
 
 def test_a_deleted_stage_row_is_a_mismatch_not_an_unreached_stage(client, migrated_engine):

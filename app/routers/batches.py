@@ -510,9 +510,8 @@ def verify_batch(
     result = verification.verify_batch(db, batch)
     conformance = None
     if result.conformance is not None:
-        as_payload = codex_scoring.as_payload(result.conformance)
         conformance = ConformanceOut.model_validate(
-            {**as_payload, "verdict": as_payload["verdict"].lower()}
+            {**result.conformance, "verdict": str(result.conformance["verdict"]).lower()}
         )
     return BatchVerifyResponse(
         batch_id=batch.id,
