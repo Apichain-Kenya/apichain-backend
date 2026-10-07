@@ -1,0 +1,7 @@
+# Reviewed gitleaks false positives, one fingerprint per line.
+# Each entry pins one finding in one commit; a new finding still fails the scan.
+
+# generic-api-key on `idempotency.begin(s, key=_KEY, actor_id=_ACTOR + 1, ...)`:
+# `_KEY` is the test constant "concurrent-key" and the matched text is a
+# keyword argument, not a credential. Reviewed 2026-10-07.
+3722cfe81a4884d88adf640edb195e723682c700:tests/test_idempotency_race.py:generic-api-key:161
