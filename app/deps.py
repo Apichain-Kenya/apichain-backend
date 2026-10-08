@@ -27,6 +27,11 @@ ACTION_ROLES: dict[str, set[Role]] = {
     # Grant or withdraw a consent purpose (P3b-B). Admits a farmer acting for
     # themselves, so the route calls ownership.assert_acts_for_farmer.
     "farmer.consent": {Role.farmer, Role.field_officer, Role.admin},
+    # A farmer's identity documents (P3b-E). Operators and lab officers have no
+    # reason to read them. Both admit a farmer, so both routes call
+    # ownership.assert_acts_for_farmer.
+    "document.upload": {Role.farmer, Role.field_officer, Role.admin},
+    "document.read": {Role.farmer, Role.field_officer, Role.admin},
     "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
     # A farmer self-registers their own harvest (04 §5.3); the remaining four

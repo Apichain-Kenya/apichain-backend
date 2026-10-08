@@ -635,6 +635,32 @@
         "title": "BatchVerifyResponse",
         "type": "object"
       },
+      "Body_upload_document_v2_farmers__farmer_id__documents_post": {
+        "properties": {
+          "doc_type": {
+            "enum": [
+              "national_id",
+              "kra_pin_certificate",
+              "land_document",
+              "farm_photo",
+              "other"
+            ],
+            "title": "Doc Type",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "doc_type"
+        ],
+        "title": "Body_upload_document_v2_farmers__farmer_id__documents_post",
+        "type": "object"
+      },
       "ConformanceOut": {
         "description": "The Codex/KEBS verdict re-derived from the lab row now, under the rule\nset recorded with it. Every limit and its basis travel with the result, so\na reader never needs to know which rules were in force.",
         "properties": {
@@ -913,6 +939,100 @@
           "retailer_name"
         ],
         "title": "DistributionRecordRequest",
+        "type": "object"
+      },
+      "DocumentListResponse": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponse"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "farmer_id": {
+            "title": "Farmer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "farmer_id",
+          "documents"
+        ],
+        "title": "DocumentListResponse",
+        "type": "object"
+      },
+      "DocumentResponse": {
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "doc_type": {
+            "title": "Doc Type",
+            "type": "string"
+          },
+          "farmer_id": {
+            "title": "Farmer Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "original_filename": {
+            "title": "Original Filename",
+            "type": "string"
+          },
+          "scan_status": {
+            "$ref": "#/components/schemas/ScanStatus"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "farmer_id",
+          "doc_type",
+          "content_type",
+          "size_bytes",
+          "original_filename",
+          "content_hash",
+          "scan_status",
+          "uploaded_at"
+        ],
+        "title": "DocumentResponse",
+        "type": "object"
+      },
+      "DownloadUrlResponse": {
+        "description": "A short-lived signed URL (04 \u00a75.6). Request a fresh one per view; it\nis never stored and never appears on any public response.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "DownloadUrlResponse",
         "type": "object"
       },
       "ErrorResponse": {
@@ -1598,6 +1718,16 @@
         ],
         "title": "RequestValidationErrorResponse",
         "type": "object"
+      },
+      "ScanStatus": {
+        "description": "Antivirus outcome for a stored document (04 \u00a75.6, 11 D5).\n\nOnly `clean` is written in 3b, because the upload scans synchronously and\nstores nothing that fails. `infected` and `pending` exist so a later rescan\njob has somewhere to put its answer without an `ALTER TYPE`.",
+        "enum": [
+          "clean",
+          "infected",
+          "pending"
+        ],
+        "title": "ScanStatus",
+        "type": "string"
       },
       "StageRecordedResponse": {
         "description": "What a transition returns: where the batch now is, and what it recorded.",
@@ -2935,6 +3065,116 @@
         ]
       }
     },
+    "/v2/documents/{document_id}/download-url": {
+      "get": {
+        "operationId": "document_download_url_v2_documents__document_id__download_url_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Document Download Url V2 Documents  Document Id  Download Url Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Document Download Url",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v2/farmers": {
       "post": {
         "operationId": "enroll_farmer_v2_farmers_post",
@@ -3241,6 +3481,226 @@
         "summary": "Record Farmer Consent",
         "tags": [
           "farmers"
+        ]
+      }
+    },
+    "/v2/farmers/{farmer_id}/documents": {
+      "get": {
+        "operationId": "list_documents_v2_farmers__farmer_id__documents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Documents",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "operationId": "upload_document_v2_farmers__farmer_id__documents_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_v2_farmers__farmer_id__documents_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            },
+            "description": "Already on file for this farmer"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Upload Document V2 Farmers  Farmer Id  Documents Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Document",
+        "tags": [
+          "documents"
         ]
       }
     },

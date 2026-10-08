@@ -74,3 +74,69 @@ class FakeCalendar:
         sub = timestamp.ops.add(OpSHA256())
         sub.attestations.add(BitcoinBlockHeaderAttestation(self.confirm_at_height))
         return timestamp
+
+
+# --- Phase 3b boundaries (11 D4) ---------------------------------------------
+
+from app.services.dev_fakes import MemoryObjectStore, SignatureScanner  # noqa: E402
+from app.services.scanner import ScannerUnavailable  # noqa: E402
+from app.services.sms import SendFailed  # noqa: E402
+from app.services.storage import StorageUnavailable  # noqa: E402
+
+
+class FakeObjectStore(MemoryObjectStore):
+    """The dev memory store, plus an outage switch."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.down = False
+
+    def put(self, key: str, data: bytes, content_type: str) -> None:
+        if self.down:
+            raise StorageUnavailable("fake outage")
+        super().put(key, data, content_type)
+
+
+class FakeScanner(SignatureScanner):
+    def __init__(self) -> None:
+        self.down = False
+
+    def scan(self, data: bytes):
+        if self.down:
+            raise ScannerUnavailable("fake outage")
+        return super().scan(data)
+
+
+class RecordingSms:
+    """Records every send; `fail_next` makes the next N sends fail."""
+
+    provider = "fake"
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []
+        self.fail_next = 0
+        self.raise_unexpected = False
+
+    def send(self, to: str, body: str) -> str:
+        if self.raise_unexpected:
+            raise RuntimeError("provider bug")
+        if self.fail_next > 0:
+            self.fail_next -= 1
+            raise SendFailed("provider_unreachable")
+        self.sent.append((to, body))
+        return f"sms-{len(self.sent)}"
+
+
+class RecordingEmail:
+    provider = "fake"
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str, str]] = []
+        self.fail_next = 0
+
+    def send(self, to: str, subject: str, body: str) -> str:
+        if self.fail_next > 0:
+            self.fail_next -= 1
+            raise SendFailed("provider_unreachable")
+        self.sent.append((to, subject, body))
+        return f"<mail-{len(self.sent)}@test>"

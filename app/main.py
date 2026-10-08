@@ -10,6 +10,7 @@ from sqlalchemy.exc import DataError
 from app.config import settings
 from app.database import SessionLocal
 from app.errors import APIError, api_error_handler, data_error_handler
+from app.middleware.body_limit import UploadSizeLimit
 from app.routers import v2_router
 from app.services import anchoring, integrity
 
@@ -75,6 +76,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Bounds what the server will receive on the upload route at all: FastAPI
+# spools a whole multipart body before any handler runs (P3b-E).
+app.add_middleware(UploadSizeLimit)
 
 app.include_router(v2_router)
 

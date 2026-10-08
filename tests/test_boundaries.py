@@ -338,11 +338,21 @@ def test_a_large_file_is_streamed_in_bounded_chunks():
 # --- security-review fixes ------------------------------------------------------
 
 
+def _enable_fake_logger(monkeypatch) -> None:
+    """Alembic's fileConfig (run by the migration tests) disables loggers that
+    already exist, so in a full run this one may be off. Turn it back on for
+    the test rather than depend on test order."""
+    import logging
+
+    monkeypatch.setattr(logging.getLogger("apichain.dev_fakes"), "disabled", False)
+
+
 def test_the_log_only_sms_redacts_codes_and_numbers_by_default(caplog, monkeypatch):
     from app.config import settings
     from app.services.dev_fakes import LogSms
 
     monkeypatch.setattr(settings, "dev_log_message_bodies", False)
+    _enable_fake_logger(monkeypatch)
     with caplog.at_level("INFO", logger="apichain.dev_fakes"):
         LogSms().send("+254712345678", "ApiChain: your code is 482913.")
     assert "482913" not in caplog.text
@@ -355,6 +365,7 @@ def test_a_developer_can_opt_in_to_full_bodies(caplog, monkeypatch):
     from app.services.dev_fakes import LogSms
 
     monkeypatch.setattr(settings, "dev_log_message_bodies", True)
+    _enable_fake_logger(monkeypatch)
     with caplog.at_level("INFO", logger="apichain.dev_fakes"):
         LogSms().send("+254712345678", "code 482913")
     assert "482913" in caplog.text
