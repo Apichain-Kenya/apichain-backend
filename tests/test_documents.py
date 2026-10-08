@@ -358,3 +358,37 @@ def test_an_undeclared_oversize_body_is_cut_off_mid_stream(monkeypatch):
     asyncio.run(UploadSizeLimit(app)(scope, receive, send))
     assert sent[0]["status"] == 413
     assert len(pulled) * 4096 <= 1024 + ENVELOPE_BYTES + 4096
+
+
+def test_concurrent_uploads_cannot_both_slip_under_the_quota(
+    client, migrated_engine, ready, boundaries, monkeypatch
+):
+    """The race the security review found: two uploads for one farmer both
+    read the quota sum before either inserted, so both passed. The farmer row
+    lock serializes them; the second sees the first's bytes and is refused.
+
+    The scanner gate holds upload A mid-flight (past its quota check) while
+    upload B starts. Without the lock, B passes the quota check too."""
+    import threading
+    import time
+
+    farmer, headers = ready
+    monkeypatch.setattr(settings, "max_subject_bytes", len(PNG) + len(PDF) - 1)
+    boundaries.scanner.gate = threading.Event()
+    results: dict[str, int] = {}
+
+    def upload(name: str, data: bytes) -> None:
+        results[name] = _upload(client, farmer, headers, data=data, name=name).status_code
+
+    first = threading.Thread(target=upload, args=("a.png", PNG))
+    first.start()
+    assert boundaries.scanner.entered.wait(timeout=10)
+    second = threading.Thread(target=upload, args=("b.pdf", PDF))
+    second.start()
+    time.sleep(0.5)  # let B reach the quota check (or the lock) while A is held
+    boundaries.scanner.gate.set()
+    first.join(timeout=15)
+    second.join(timeout=15)
+
+    assert sorted(results.values()) == [201, 413], results
+    assert _counts(migrated_engine) == (1, 1)

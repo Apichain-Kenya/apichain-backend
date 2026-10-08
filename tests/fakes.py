@@ -7,6 +7,7 @@ normal case for hours), one that has been confirmed, or one that is simply
 down.
 """
 
+import threading
 import time
 
 from opentimestamps.core.notary import (
@@ -98,12 +99,20 @@ class FakeObjectStore(MemoryObjectStore):
 
 
 class FakeScanner(SignatureScanner):
+    """`gate`, when set, holds every scan until released: a concurrency test
+    uses it to keep one upload mid-flight while another starts."""
+
     def __init__(self) -> None:
         self.down = False
+        self.gate: threading.Event | None = None
+        self.entered = threading.Event()
 
     def scan(self, data: bytes):
         if self.down:
             raise ScannerUnavailable("fake outage")
+        self.entered.set()
+        if self.gate is not None:
+            self.gate.wait(timeout=10)
         return super().scan(data)
 
 

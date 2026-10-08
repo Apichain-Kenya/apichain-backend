@@ -3,7 +3,9 @@
 **Upload order.** No byte reaches the bucket until consent, the size cap, the
 type check and the scan have all passed:
 
-    1. farmer exists; actor may act for them       -> 404 / 403
+    1. farmer exists (row locked: one upload per
+       farmer at a time, so the quota holds);
+       actor may act for them                      -> 404 / 403
     2. document_upload consent stands              -> 422 consent_required
     3. size (the middleware bounds the body;
        this checks the file exactly)               -> 413 file_too_large
@@ -71,8 +73,9 @@ _DOCUMENT_ID = Path(ge=1, le=2_147_483_647)
 DocType = Literal["national_id", "kra_pin_certificate", "land_document", "farm_photo", "other"]
 
 
-def _farmer_or_404(db: Session, farmer_id: int) -> Farmer:
-    farmer = db.get(Farmer, farmer_id)
+def _farmer_or_404(db: Session, farmer_id: int, *, lock: bool = False) -> Farmer:
+    query = select(Farmer).where(Farmer.id == farmer_id)
+    farmer = db.execute(query.with_for_update() if lock else query).scalar_one_or_none()
     if farmer is None:
         raise APIError(404, "farmer_not_found", "Farmer does not exist", {"farmer_id": farmer_id})
     return farmer
@@ -125,7 +128,10 @@ def upload_document(
     store: ObjectStore = Depends(get_object_store),
     scanner: Scanner = Depends(get_scanner),
 ) -> DocumentResponse | JSONResponse:
-    farmer = _farmer_or_404(db, farmer_id)
+    # FOR UPDATE: a farmer's uploads run one at a time, so two cannot both
+    # read the quota sum before either inserts (a race the security review
+    # found). Lock order is farmer row, then the audit chain lock in append.
+    farmer = _farmer_or_404(db, farmer_id, lock=True)
     ownership.assert_acts_for_farmer(db, actor, farmer.id)
     consent.require_consent(
         db, subject_type="farmer", subject_id=farmer.id, purpose=ConsentPurpose.document_upload
