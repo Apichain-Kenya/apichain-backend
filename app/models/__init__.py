@@ -5,16 +5,22 @@ is what `alembic/env.py` autogenerates against and what the app imports.
 from app.enums import (
     AnchorTarget,
     BatchState,
+    CommChannel,
+    CommPurpose,
+    CommStatus,
     ConformanceVerdict,
     ConsentPurpose,
     GrantedVia,
     Role,
+    ScanStatus,
 )
 from app.models.anchor import MerkleAnchor
 from app.models.audit import AuditLog, ConsentRecord
 from app.models.auth import IdempotencyKey, RefreshToken
 from app.models.batch import HoneyBatch
+from app.models.comms import Communication, VerificationCode
 from app.models.identity import Farmer, User
+from app.models.media import Document
 from app.models.stages import (
     ApiaryLocation,
     ApiaryRecord,
@@ -35,10 +41,15 @@ __all__ = [
     "BatchMetadata",
     "BatchState",
     "CodexConformance",
+    "CommChannel",
+    "CommPurpose",
+    "CommStatus",
+    "Communication",
     "ConformanceVerdict",
     "ConsentPurpose",
     "ConsentRecord",
     "DistributionRecord",
+    "Document",
     "Farmer",
     "GrantedVia",
     "HarvestRecord",
@@ -50,5 +61,7 @@ __all__ = [
     "ProcessRecord",
     "RefreshToken",
     "Role",
+    "ScanStatus",
     "User",
+    "VerificationCode",
 ]

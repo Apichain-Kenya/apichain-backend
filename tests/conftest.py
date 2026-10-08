@@ -24,6 +24,7 @@ from alembic import command
 # Every new table must be added here AND in test_contract.py, or rows leak
 # between tests in ways that only show up in a full run.
 _ALL_TABLES = (
+    "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "

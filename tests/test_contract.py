@@ -18,6 +18,7 @@ from app.main import app
 
 # Keep in step with tests/conftest.py::_ALL_TABLES (child-first).
 _ALL_TABLES = (
+    "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "

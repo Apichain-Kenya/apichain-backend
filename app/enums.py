@@ -79,3 +79,46 @@ class AnchorTarget(enum.StrEnum):
 
     opentimestamps = "opentimestamps"
     polygon = "polygon"
+
+
+class ScanStatus(enum.StrEnum):
+    """Antivirus outcome for a stored document (04 §5.6, 11 D5).
+
+    Only `clean` is written in 3b, because the upload scans synchronously and
+    stores nothing that fails. `infected` and `pending` exist so a later rescan
+    job has somewhere to put its answer without an `ALTER TYPE`.
+    """
+
+    clean = "clean"
+    infected = "infected"
+    pending = "pending"
+
+
+class CommChannel(enum.StrEnum):
+    """Outbound channels (04 §5.7)."""
+
+    sms = "sms"
+    email = "email"
+
+
+class CommPurpose(enum.StrEnum):
+    """Why a message was sent. Verification is an enrolment step, never a
+    login (04 §3.5); milestones follow a batch's audit rows (11 D8)."""
+
+    verification = "verification"
+    milestone = "milestone"
+
+
+class CommStatus(enum.StrEnum):
+    """A communication's lifecycle (11 D8).
+
+    `queued` -> `sending` (claimed) -> `sent` | `failed`; `skipped` when the
+    consent check at send time finds none. `sending` is visible to other
+    workers, so a crashed worker's claim is reclaimed after a timeout.
+    """
+
+    queued = "queued"
+    sending = "sending"
+    sent = "sent"
+    failed = "failed"
+    skipped = "skipped"
