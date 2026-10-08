@@ -24,6 +24,9 @@ _bearer = HTTPBearer(auto_error=False)
 # The complete action -> allowed-roles map. Grows one line per new action.
 ACTION_ROLES: dict[str, set[Role]] = {
     "farmer.enroll": {Role.field_officer, Role.admin},
+    # Grant or withdraw a consent purpose (P3b-B). Admits a farmer acting for
+    # themselves, so the route calls ownership.assert_acts_for_farmer.
+    "farmer.consent": {Role.farmer, Role.field_officer, Role.admin},
     "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
     # A farmer self-registers their own harvest (04 §5.3); the remaining four

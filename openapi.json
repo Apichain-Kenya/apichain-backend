@@ -726,6 +726,156 @@
         "title": "ConformanceParameterOut",
         "type": "object"
       },
+      "ConsentPurpose": {
+        "description": "Consent events captured at enrollment or upload (04 \u00a75.2).",
+        "enum": [
+          "data_processing",
+          "document_upload",
+          "sms_notifications",
+          "email_notifications",
+          "photo_publish"
+        ],
+        "title": "ConsentPurpose",
+        "type": "string"
+      },
+      "ConsentRecordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ConsentPurpose"
+          },
+          "text_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Text Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "granted",
+          "text_version"
+        ],
+        "title": "ConsentRecordRequest",
+        "type": "object"
+      },
+      "ConsentResponse": {
+        "properties": {
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "granted_via": {
+            "$ref": "#/components/schemas/GrantedVia"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ConsentPurpose"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "text_version": {
+            "title": "Text Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "purpose",
+          "granted",
+          "granted_via",
+          "text_version",
+          "recorded_at"
+        ],
+        "title": "ConsentResponse",
+        "type": "object"
+      },
+      "ConsentStateOut": {
+        "description": "The current state of one purpose: the newest row, or never recorded.",
+        "properties": {
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "granted_via": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantedVia"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ConsentPurpose"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          },
+          "text_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Version"
+          }
+        },
+        "required": [
+          "purpose",
+          "granted",
+          "granted_via",
+          "text_version",
+          "recorded_at"
+        ],
+        "title": "ConsentStateOut",
+        "type": "object"
+      },
+      "ConsentStateResponse": {
+        "properties": {
+          "consents": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentStateOut"
+            },
+            "title": "Consents",
+            "type": "array"
+          },
+          "farmer_id": {
+            "title": "Farmer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "farmer_id",
+          "consents"
+        ],
+        "title": "ConsentStateResponse",
+        "type": "object"
+      },
       "DistributionRecordRequest": {
         "description": "S5, terminal.",
         "properties": {
@@ -916,6 +1066,15 @@
         ],
         "title": "FarmerResponse",
         "type": "object"
+      },
+      "GrantedVia": {
+        "description": "How a consent grant was captured (04 \u00a75.2).",
+        "enum": [
+          "onboarder",
+          "farmer_self"
+        ],
+        "title": "GrantedVia",
+        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1420,6 +1579,24 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "RequestValidationErrorResponse": {
+        "description": "FastAPI's own 422 body for a request that fails schema validation.\n\nA route that also raises a *domain* 422 (`consent_required`,\n`invalid_code`, ...) declares 422 itself, which replaces FastAPI's default\n422 schema. Without this second shape the declaration would then promise\nonly the envelope, and every malformed body would violate the contract\n(P3b-B: Schemathesis sent a lone NUL byte as a body and found exactly that).",
+        "properties": {
+          "detail": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "RequestValidationErrorResponse",
         "type": "object"
       },
       "StageRecordedResponse": {
@@ -2852,6 +3029,216 @@
           }
         ],
         "summary": "Enroll Farmer",
+        "tags": [
+          "farmers"
+        ]
+      }
+    },
+    "/v2/farmers/{farmer_id}/consents": {
+      "get": {
+        "description": "The current state of every purpose. A read, so no audit row (the PII\n`data_access` rows are Phase 5).",
+        "operationId": "farmer_consents_v2_farmers__farmer_id__consents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Farmer Consents",
+        "tags": [
+          "farmers"
+        ]
+      },
+      "post": {
+        "description": "Grant or withdraw one consent purpose (03 \u00a77, 11 \u00a75).\n\nThe ledger keeps every choice; the newest row decides. `data_processing`\ncannot be withdrawn here: withdrawing it means \"stop processing my data\",\nwhich is the Phase 5 deletion workflow, and recording a withdrawal nothing\nhonours would be worse than refusing it.",
+        "operationId": "record_farmer_consent_v2_farmers__farmer_id__consents_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Record Farmer Consent V2 Farmers  Farmer Id  Consents Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Farmer Consent",
         "tags": [
           "farmers"
         ]

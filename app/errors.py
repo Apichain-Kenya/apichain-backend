@@ -18,6 +18,19 @@ class ErrorResponse(BaseModel):
     details: dict[str, Any] | None = None
 
 
+class RequestValidationErrorResponse(BaseModel):
+    """FastAPI's own 422 body for a request that fails schema validation.
+
+    A route that also raises a *domain* 422 (`consent_required`,
+    `invalid_code`, ...) declares 422 itself, which replaces FastAPI's default
+    422 schema. Without this second shape the declaration would then promise
+    only the envelope, and every malformed body would violate the contract
+    (P3b-B: Schemathesis sent a lone NUL byte as a body and found exactly that).
+    """
+
+    detail: list[dict[str, Any]]
+
+
 def error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
     """Build a FastAPI `responses=` map documenting the error envelope for each
     given status code. Always documents 400 (Starlette returns it with a plain
@@ -26,6 +39,9 @@ def error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
     responses: dict[int | str, dict[str, Any]] = {400: {"description": "Malformed request body"}}
     for code in status_codes:
         responses[code] = {"model": ErrorResponse}
+    if 422 in status_codes:
+        # Either a domain refusal (the envelope) or FastAPI's validation body.
+        responses[422] = {"model": ErrorResponse | RequestValidationErrorResponse}
     return responses
 
 
