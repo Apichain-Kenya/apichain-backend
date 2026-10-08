@@ -193,3 +193,35 @@ def test_a_nul_byte_in_text_version_is_refused_at_the_edge(client, migrated_engi
         headers=headers,
     )
     assert r.status_code == 422
+
+
+def test_staff_cannot_reverse_a_farmers_own_withdrawal(client, migrated_engine):
+    """A data subject's own opt-out is reversible only by the data subject.
+    Otherwise an officer re-granting `sms_notifications` silently undoes a
+    farmer's "stop texting me" (03 §9), and the ledger would show consent the
+    farmer explicitly took back."""
+    farmer, farmer_headers = _farmer_with_login(migrated_engine, "+254700320010")
+    url = f"/v2/farmers/{farmer}/consents"
+    officer = _officer(migrated_engine, "fo10")
+
+    client.post(url, json=_body("sms_notifications", True), headers=officer)
+    client.post(url, json=_body("sms_notifications", False), headers=farmer_headers)
+    before = _counts(migrated_engine)
+
+    r = client.post(url, json=_body("sms_notifications", True), headers=officer)
+    assert r.status_code == 409
+    assert r.json()["code"] == "withdrawn_by_farmer"
+    assert _counts(migrated_engine) == before
+
+    # The farmer can change their own mind.
+    r = client.post(url, json=_body("sms_notifications", True), headers=farmer_headers)
+    assert r.status_code == 201
+
+
+def test_staff_may_correct_a_withdrawal_staff_recorded(client, migrated_engine):
+    farmer, _ = _farmer_with_login(migrated_engine, "+254700320011")
+    url = f"/v2/farmers/{farmer}/consents"
+    officer = _officer(migrated_engine, "fo11")
+    client.post(url, json=_body("sms_notifications", False), headers=officer)
+    r = client.post(url, json=_body("sms_notifications", True), headers=officer)
+    assert r.status_code == 201
