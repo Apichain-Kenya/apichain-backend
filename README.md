@@ -21,6 +21,12 @@ docker compose up --build
 # Mailpit:         http://localhost:8025
 ```
 
+Document uploads need a virus scanner: `docker compose --profile av up` adds
+ClamAV. Without it uploads answer 503, because the scanner fails closed. With
+no Docker at all, set `SCANNER_BACKEND=fake` in `.env` on purpose. SMS is
+log-only (`SMS_BACKEND=fake`) until Africa's Talking credentials exist; set
+`DEV_LOG_MESSAGE_BODIES=true` to read verification codes from the log.
+
 No venv activation, no uvicorn zombie hunting: the container owns the
 process tree. For a native inner loop instead: `uv run uvicorn app.main:app --reload`.
 
