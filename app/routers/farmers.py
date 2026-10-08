@@ -167,22 +167,25 @@ def record_farmer_consent(
     # A data subject's own withdrawal is reversible only by the data subject.
     # Otherwise an officer re-granting sms_notifications silently undoes a
     # farmer's "stop texting me", and the ledger shows consent the farmer
-    # explicitly took back. Staff may still correct a withdrawal staff made.
+    # explicitly took back. The question is the farmer's own latest choice,
+    # not the newest row: staff recording a withdrawal first must not turn the
+    # farmer's withdrawal into one staff may then reverse.
     if body.granted and granted_via is GrantedVia.onboarder:
-        latest = consent.current(
-            db, subject_type="farmer", subject_id=farmer.id, purpose=body.purpose
+        own = consent.current(
+            db,
+            subject_type="farmer",
+            subject_id=farmer.id,
+            purpose=body.purpose,
+            granted_via=GrantedVia.farmer_self,
         )
-        if (
-            latest is not None
-            and not latest.granted
-            and latest.granted_via is GrantedVia.farmer_self
-        ):
+        if own is not None and not own.granted:
             raise APIError(
                 409,
                 "withdrawn_by_farmer",
                 "The farmer withdrew this consent themselves; only they can grant it again",
                 {"purpose": str(body.purpose)},
             )
+
     row = consent.record_consent(
         db,
         subject_type="farmer",

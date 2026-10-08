@@ -225,3 +225,34 @@ def test_staff_may_correct_a_withdrawal_staff_recorded(client, migrated_engine):
     client.post(url, json=_body("sms_notifications", False), headers=officer)
     r = client.post(url, json=_body("sms_notifications", True), headers=officer)
     assert r.status_code == 201
+
+
+def test_a_staff_withdrawal_does_not_launder_a_farmers_withdrawal(client, migrated_engine):
+    """The bypass of the first version of this check: staff record their own
+    withdrawal on top of the farmer's, so the newest row is no longer the
+    farmer's, then re-grant. The farmer's own latest choice still governs."""
+    farmer, farmer_headers = _farmer_with_login(migrated_engine, "+254700320012")
+    url = f"/v2/farmers/{farmer}/consents"
+    officer = _officer(migrated_engine, "fo12")
+
+    client.post(url, json=_body("sms_notifications", True), headers=farmer_headers)
+    client.post(url, json=_body("sms_notifications", False), headers=farmer_headers)
+    assert (
+        client.post(url, json=_body("sms_notifications", False), headers=officer).status_code == 201
+    )
+
+    r = client.post(url, json=_body("sms_notifications", True), headers=officer)
+    assert r.status_code == 409
+    assert r.json()["code"] == "withdrawn_by_farmer"
+
+
+def test_a_farmers_own_regrant_lifts_the_block(client, migrated_engine):
+    farmer, farmer_headers = _farmer_with_login(migrated_engine, "+254700320013")
+    url = f"/v2/farmers/{farmer}/consents"
+    officer = _officer(migrated_engine, "fo13")
+    client.post(url, json=_body("sms_notifications", False), headers=farmer_headers)
+    client.post(url, json=_body("sms_notifications", True), headers=farmer_headers)
+    client.post(url, json=_body("sms_notifications", False), headers=officer)
+    assert (
+        client.post(url, json=_body("sms_notifications", True), headers=officer).status_code == 201
+    )

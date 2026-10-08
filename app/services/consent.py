@@ -77,23 +77,28 @@ def capture_consent(
 
 
 def current(
-    db: Session, *, subject_type: str, subject_id: int, purpose: ConsentPurpose
+    db: Session,
+    *,
+    subject_type: str,
+    subject_id: int,
+    purpose: ConsentPurpose,
+    granted_via: GrantedVia | None = None,
 ) -> ConsentRecord | None:
     """The newest row for this subject and purpose, grant or withdrawal.
 
-    Ordered by `id`, not `granted_at`: two rows written in one transaction
-    share `now()`, and the sequence still orders them.
+    `granted_via` narrows it to one capturer's latest choice (the consent
+    endpoint asks for the farmer's own). Ordered by `id`, not `granted_at`:
+    two rows written in one transaction share `now()`, and the sequence still
+    orders them.
     """
-    return db.execute(
-        select(ConsentRecord)
-        .where(
-            ConsentRecord.subject_type == subject_type,
-            ConsentRecord.subject_id == subject_id,
-            ConsentRecord.consent_purpose == purpose,
-        )
-        .order_by(ConsentRecord.id.desc())
-        .limit(1)
-    ).scalar_one_or_none()
+    query = select(ConsentRecord).where(
+        ConsentRecord.subject_type == subject_type,
+        ConsentRecord.subject_id == subject_id,
+        ConsentRecord.consent_purpose == purpose,
+    )
+    if granted_via is not None:
+        query = query.where(ConsentRecord.granted_via == granted_via)
+    return db.execute(query.order_by(ConsentRecord.id.desc()).limit(1)).scalar_one_or_none()
 
 
 def has_consent(
