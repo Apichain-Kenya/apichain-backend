@@ -36,6 +36,12 @@ _ALL_TABLES = (
 def _disable_scheduler():
     """Keep the background integrity scheduler off during tests (P1-G)."""
     app.config.settings.scheduler_enabled = False
+    # No test reaches MinIO, ClamAV, Africa's Talking or SMTP (11 D4). Tests
+    # that need to inspect a boundary inject their own fake.
+    app.config.settings.storage_backend = "fake"
+    app.config.settings.scanner_backend = "fake"
+    app.config.settings.sms_backend = "fake"
+    app.config.settings.email_backend = "fake"
     yield
 
 
