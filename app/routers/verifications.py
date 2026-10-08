@@ -83,7 +83,9 @@ def send_verification_code(
     email: EmailSender = Depends(get_email),
 ) -> VerificationSentResponse:
     farmer = db.execute(
-        select(Farmer).where(Farmer.id == farmer_id).with_for_update()
+        # NO KEY UPDATE: serializes sends for this farmer without blocking FK
+        # checks that reference the row (see routers/documents.py).
+        select(Farmer).where(Farmer.id == farmer_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if farmer is None:
         raise APIError(404, "farmer_not_found", "Farmer does not exist", {"farmer_id": farmer_id})

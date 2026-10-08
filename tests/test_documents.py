@@ -392,3 +392,36 @@ def test_concurrent_uploads_cannot_both_slip_under_the_quota(
 
     assert sorted(results.values()) == [201, 413], results
     assert _counts(migrated_engine) == (1, 1)
+
+
+def test_a_scanning_upload_does_not_block_the_farmers_other_writes(
+    client, migrated_engine, ready, boundaries
+):
+    """The upload's farmer row lock is FOR NO KEY UPDATE, not FOR UPDATE.
+    FOR UPDATE conflicts with the FOR KEY SHARE lock that every foreign-key
+    check takes, so while one upload sat in a 30-second scan, creating a batch
+    for that farmer (honey_batches.farmer_id) would have waited on it."""
+    import threading
+    import time
+
+    from tests.helpers import METADATA, seed_apiary
+
+    farmer, headers = ready
+    apiary = seed_apiary(migrated_engine, farmer)
+    boundaries.scanner.gate = threading.Event()
+    upload = threading.Thread(target=_upload, args=(client, farmer, headers))
+    upload.start()
+    try:
+        assert boundaries.scanner.entered.wait(timeout=10)
+        started = time.monotonic()
+        r = client.post(
+            "/v2/batches",
+            json={"farmer_id": farmer, "apiary_id": apiary, "metadata": METADATA},
+            headers=headers,
+        )
+        elapsed = time.monotonic() - started
+    finally:
+        boundaries.scanner.gate.set()
+        upload.join(timeout=15)
+    assert r.status_code == 201, r.text
+    assert elapsed < 3, f"batch create waited {elapsed:.1f}s on the upload's lock"

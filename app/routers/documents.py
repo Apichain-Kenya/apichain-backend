@@ -75,7 +75,13 @@ DocType = Literal["national_id", "kra_pin_certificate", "land_document", "farm_p
 
 def _farmer_or_404(db: Session, farmer_id: int, *, lock: bool = False) -> Farmer:
     query = select(Farmer).where(Farmer.id == farmer_id)
-    farmer = db.execute(query.with_for_update() if lock else query).scalar_one_or_none()
+    # FOR NO KEY UPDATE, not FOR UPDATE: it serializes this farmer's uploads
+    # against each other without conflicting with the FOR KEY SHARE lock every
+    # foreign-key check takes, so a 30-second scan does not block creating a
+    # batch (or anything else that references this farmer).
+    farmer = db.execute(
+        query.with_for_update(key_share=True) if lock else query
+    ).scalar_one_or_none()
     if farmer is None:
         raise APIError(404, "farmer_not_found", "Farmer does not exist", {"farmer_id": farmer_id})
     return farmer
