@@ -661,6 +661,15 @@
         "title": "Body_upload_document_v2_farmers__farmer_id__documents_post",
         "type": "object"
       },
+      "CommChannel": {
+        "description": "Outbound channels (04 \u00a75.7).",
+        "enum": [
+          "sms",
+          "email"
+        ],
+        "title": "CommChannel",
+        "type": "string"
+      },
       "ConformanceOut": {
         "description": "The Codex/KEBS verdict re-derived from the lab row now, under the rule\nset recorded with it. Every limit and its basis travel with the result, so\na reader never needs to know which rules were in force.",
         "properties": {
@@ -2020,6 +2029,80 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VerificationConfirmRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/CommChannel"
+          },
+          "code": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "code"
+        ],
+        "title": "VerificationConfirmRequest",
+        "type": "object"
+      },
+      "VerificationConfirmedResponse": {
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/CommChannel"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "title": "Verified At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "verified_at"
+        ],
+        "title": "VerificationConfirmedResponse",
+        "type": "object"
+      },
+      "VerificationSendRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/CommChannel"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "VerificationSendRequest",
+        "type": "object"
+      },
+      "VerificationSentResponse": {
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/CommChannel"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "resend_available_at": {
+            "format": "date-time",
+            "title": "Resend Available At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "expires_at",
+          "resend_available_at"
+        ],
+        "title": "VerificationSentResponse",
         "type": "object"
       }
     },
@@ -3701,6 +3784,226 @@
         "summary": "Upload Document",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/v2/farmers/{farmer_id}/verifications": {
+      "post": {
+        "operationId": "send_verification_code_v2_farmers__farmer_id__verifications_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationSentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Send Verification Code V2 Farmers  Farmer Id  Verifications Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Verification Code",
+        "tags": [
+          "verifications"
+        ]
+      }
+    },
+    "/v2/farmers/{farmer_id}/verifications/confirm": {
+      "post": {
+        "operationId": "confirm_verification_code_v2_farmers__farmer_id__verifications_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationConfirmedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Confirm Verification Code V2 Farmers  Farmer Id  Verifications Confirm Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Verification Code",
+        "tags": [
+          "verifications"
         ]
       }
     },

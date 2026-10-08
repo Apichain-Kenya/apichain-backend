@@ -32,6 +32,10 @@ ACTION_ROLES: dict[str, set[Role]] = {
     # ownership.assert_acts_for_farmer.
     "document.upload": {Role.farmer, Role.field_officer, Role.admin},
     "document.read": {Role.farmer, Role.field_officer, Role.admin},
+    # Enrolment contact verification (P3b-G): a verification step, never a
+    # login (04 §3.5). Farmer-reachable, so both routes check ownership.
+    "farmer.verify_contact": {Role.farmer, Role.field_officer, Role.admin},
+    "farmer.confirm_contact": {Role.farmer, Role.field_officer, Role.admin},
     "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
     # A farmer self-registers their own harvest (04 §5.3); the remaining four

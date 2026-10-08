@@ -46,11 +46,20 @@ def error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
 
 
 class APIError(Exception):
-    def __init__(self, status_code: int, code: str, message: str, details: Any = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        details: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message
         self.details = details
+        # e.g. Retry-After on a 429 (P3b-G).
+        self.headers = headers
         super().__init__(message)
 
 
@@ -59,7 +68,7 @@ async def api_error_handler(request: Request, exc: Exception) -> JSONResponse:
     body: dict[str, Any] = {"code": exc.code, "message": exc.message}
     if exc.details is not None:
         body["details"] = exc.details
-    return JSONResponse(status_code=exc.status_code, content=body)
+    return JSONResponse(status_code=exc.status_code, content=body, headers=exc.headers)
 
 
 async def data_error_handler(request: Request, exc: Exception) -> JSONResponse:
