@@ -72,7 +72,8 @@ class BatchVerifyResponse(BaseModel):
     # route is keyed by `public_id`, so it no longer enables enumeration.
     batch_id: int
     public_id: str
-    batch_code: str
+    # No `batch_code`: clients may supply it as free text, so a name or phone
+    # typed there would reach every jar scan (11 D11). `public_id` is the key.
     state: str
     # The farmer's declaration in display form (no free text).
     metadata: MetadataPublic | None

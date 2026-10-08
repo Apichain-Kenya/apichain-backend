@@ -199,10 +199,6 @@
       },
       "AnchorProofResponse": {
         "properties": {
-          "batch_code": {
-            "title": "Batch Code",
-            "type": "string"
-          },
           "batch_id": {
             "title": "Batch Id",
             "type": "integer"
@@ -232,7 +228,6 @@
         "required": [
           "batch_id",
           "public_id",
-          "batch_code",
           "status",
           "entries"
         ],
@@ -592,10 +587,6 @@
             "title": "Anchor Status",
             "type": "string"
           },
-          "batch_code": {
-            "title": "Batch Code",
-            "type": "string"
-          },
           "batch_id": {
             "title": "Batch Id",
             "type": "integer"
@@ -635,7 +626,6 @@
         "required": [
           "batch_id",
           "public_id",
-          "batch_code",
           "state",
           "metadata",
           "verification",
@@ -1771,6 +1761,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2063,6 +2055,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2182,6 +2176,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2301,6 +2297,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2420,6 +2418,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2539,6 +2539,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2658,6 +2660,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -2765,6 +2769,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {

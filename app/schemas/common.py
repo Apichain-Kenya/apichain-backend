@@ -23,6 +23,7 @@ than into the driver, where it is a status the contract did not promise.
 from decimal import Decimal
 from typing import Annotated
 
+from fastapi import Header
 from pydantic import Field
 
 # Postgres text rejects U+0000; everything else, including full Unicode, is fine.
@@ -52,3 +53,11 @@ Measurement = Annotated[
 # records what happens when a value silently means something other than its
 # field name says.
 Percentage = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("100"), decimal_places=2)]
+
+# The `Idempotency-Key` header (04 §5.4), bounded (11 §4). The key is stored as
+# a `String` primary key, so an unbounded value was capped only by whatever
+# header limit the server happened to have. 255 is generous for a UUID or a
+# client-generated token and makes an oversized key an honest 422.
+IdempotencyKeyHeader = Annotated[
+    str | None, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+]

@@ -7,7 +7,7 @@ Staff-facing and keyed by the internal `id`. The two anonymous consumer views
 
 import uuid
 
-from fastapi import APIRouter, Depends, Header, Path, Request
+from fastapi import APIRouter, Depends, Path, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,6 +36,7 @@ from app.schemas.batches import (
     BatchResponse,
     StageRecordedResponse,
 )
+from app.schemas.common import IdempotencyKeyHeader
 from app.schemas.stages import (
     DistributionRecordRequest,
     HarvestRecordRequest,
@@ -81,7 +82,7 @@ def create_batch(
     request: Request,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_create),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> BatchResponse | JSONResponse:
     idem = idempotency.begin(
         db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
@@ -206,7 +207,7 @@ def record_harvest(
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_harvest),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S0 -> S1."""
     return stage_writer.record_stage(
@@ -243,7 +244,7 @@ def record_process(
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_process),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S1 -> S2."""
     return stage_writer.record_stage(
@@ -310,7 +311,7 @@ def record_lab_result(
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_lab),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S2 -> S3, and the only transition that produces a judgement.
 
@@ -360,7 +361,7 @@ def record_packaging(
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_package),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S3 -> S4."""
     return stage_writer.record_stage(
@@ -394,7 +395,7 @@ def record_distribution(
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_distribute),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so
     every transition endpoint refuses a distributed batch, this one included."""

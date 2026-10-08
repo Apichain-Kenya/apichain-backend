@@ -2,7 +2,7 @@
 acceptance test: creates the farmer's credential + profile, captures consent,
 and appends the `farmer.enrolled` audit row — all in one transaction."""
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from app.deps import requires
 from app.errors import APIError, error_responses
 from app.models import ConsentPurpose, Farmer, GrantedVia, Role, User
 from app.routers._context import request_context
+from app.schemas.common import IdempotencyKeyHeader
 from app.schemas.farmers import FarmerEnrollRequest, FarmerResponse
 from app.services import audit_log, consent, idempotency, security
 
@@ -30,7 +31,7 @@ def enroll_farmer(
     request: Request,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_enroll),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> FarmerResponse | JSONResponse:
     idem = idempotency.begin(
         db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
