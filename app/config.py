@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     at_sender_id: str | None = None
     at_sandbox: bool = True
     at_timeout_seconds: float = 10.0
+    # The log-only fakes redact recipients and mask digits unless this is set.
+    # Dev machines only: it puts verification codes in the log.
+    dev_log_message_bodies: bool = False
     email_backend: Literal["smtp", "fake"] = "smtp"
     smtp_host: str = "localhost"
     smtp_port: int = 1025

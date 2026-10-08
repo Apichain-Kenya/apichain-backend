@@ -333,3 +333,69 @@ def test_a_large_file_is_streamed_in_bounded_chunks():
     stream = received[0]
     assert stream.count(struct.pack(">I", 64 * 1024)) >= 2
     assert stream.endswith(struct.pack(">I", 0))
+
+
+# --- security-review fixes ------------------------------------------------------
+
+
+def test_the_log_only_sms_redacts_codes_and_numbers_by_default(caplog, monkeypatch):
+    from app.config import settings
+    from app.services.dev_fakes import LogSms
+
+    monkeypatch.setattr(settings, "dev_log_message_bodies", False)
+    with caplog.at_level("INFO", logger="apichain.dev_fakes"):
+        LogSms().send("+254712345678", "ApiChain: your code is 482913.")
+    assert "482913" not in caplog.text
+    assert "+254712345678" not in caplog.text
+    assert "678" in caplog.text  # enough to tell recipients apart
+
+
+def test_a_developer_can_opt_in_to_full_bodies(caplog, monkeypatch):
+    from app.config import settings
+    from app.services.dev_fakes import LogSms
+
+    monkeypatch.setattr(settings, "dev_log_message_bodies", True)
+    with caplog.at_level("INFO", logger="apichain.dev_fakes"):
+        LogSms().send("+254712345678", "code 482913")
+    assert "482913" in caplog.text
+
+
+def test_starttls_verifies_the_server_certificate(monkeypatch):
+    import ssl
+
+    from app.services.mailer import SmtpEmail
+
+    seen: dict = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def starttls(self, context=None):
+            seen["context"] = context
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, message):
+            seen["sent"] = True
+
+    monkeypatch.setattr("app.services.mailer.smtplib.SMTP", FakeSMTP)
+    SmtpEmail(
+        host="smtp.test",
+        port=587,
+        sender="a@b.test",
+        username=None,
+        password=None,
+        starttls=True,
+        timeout=5,
+    ).send("c@d.test", "s", "b")
+    context = seen["context"]
+    assert isinstance(context, ssl.SSLContext)
+    assert context.verify_mode is ssl.CERT_REQUIRED and context.check_hostname is True

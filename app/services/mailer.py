@@ -12,6 +12,7 @@ the standard library's `email` package it builds messages with.
 
 import logging
 import smtplib
+import ssl
 from email.message import EmailMessage
 from email.utils import make_msgid
 from typing import Protocol
@@ -59,7 +60,10 @@ class SmtpEmail:
         try:
             with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
                 if self._starttls:
-                    smtp.starttls()
+                    # An explicit default context: smtplib's own default does
+                    # not verify the server certificate or its hostname, which
+                    # would make STARTTLS interceptable.
+                    smtp.starttls(context=ssl.create_default_context())
                 if self._username:
                     smtp.login(self._username, self._password or "")
                 smtp.send_message(message)

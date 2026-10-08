@@ -5,18 +5,23 @@ name on whatever it touches (`provider='fake'`, `scan_engine='fake'`), so a
 row produced by a fake is identifiable forever, not only at deploy time.
 
 Two of them are useful outside tests. `LogSms` is the SMS default because no
-Africa's Talking credentials exist; it logs the message (including any
-verification code, which is the only way to use the flow in dev). And
+Africa's Talking credentials exist, which also means a production box that
+forgot to configure SMS would be running it. So it logs **redacted** by
+default: the recipient's last three digits and the body with every digit
+masked, which hides a verification code. A developer who needs to read the
+code sets `dev_log_message_bodies=true` on their own machine. And
 `SignatureScanner` lets a machine without Docker exercise uploads; it detects
 the EICAR test string, so the infected path still behaves like a scanner's.
 """
 
 import datetime as dt
 import logging
+import re
 import uuid
 from typing import ClassVar
 from urllib.parse import quote
 
+from app.config import settings
 from app.services.scanner import ScanResult
 
 logger = logging.getLogger("apichain.dev_fakes")
@@ -68,11 +73,31 @@ class MemoryObjectStore:
         )
 
 
+_DIGIT = re.compile(r"\d")
+
+
+def redact_recipient(to: str) -> str:
+    return "*" * max(len(to) - 3, 0) + to[-3:]
+
+
+def redact_body(body: str) -> str:
+    """Every digit masked: a verification code is digits, and so is most of
+    anything else worth hiding in a short message."""
+    return _DIGIT.sub("*", body)
+
+
+def _shown(to: str, body: str) -> tuple[str, str]:
+    if settings.dev_log_message_bodies:
+        return to, body
+    return redact_recipient(to), redact_body(body)
+
+
 class LogSms:
     provider = "fake"
 
     def send(self, to: str, body: str) -> str:
-        logger.info("[fake sms] to=%s body=%s", to, body)
+        shown_to, shown_body = _shown(to, body)
+        logger.info("[fake sms] to=%s body=%s", shown_to, shown_body)
         return f"fake-{uuid.uuid4().hex[:12]}"
 
 
@@ -80,5 +105,6 @@ class LogEmail:
     provider = "fake"
 
     def send(self, to: str, subject: str, body: str) -> str:
-        logger.info("[fake email] to=%s subject=%s body=%s", to, subject, body)
+        shown_to, shown_body = _shown(to, body)
+        logger.info("[fake email] to=%s subject=%s body=%s", shown_to, subject, shown_body)
         return f"<fake-{uuid.uuid4().hex[:12]}@apichain.invalid>"
