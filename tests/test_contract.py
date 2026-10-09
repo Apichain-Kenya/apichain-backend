@@ -10,6 +10,7 @@ so generated traffic never leaks between tests.
 
 import pytest
 import schemathesis
+from hypothesis import HealthCheck, settings
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
@@ -48,6 +49,17 @@ def _db_override(migrated_engine):
             conn.execute(text(f"truncate table {_ALL_TABLES} restart identity cascade"))
 
 
+# Restated here, not only in schemathesis.toml, because the toml setting never
+# reached CI. Hypothesis loads its built-in `ci` profile whenever the `CI`
+# environment variable is set (GitHub Actions always sets it). That profile
+# suppresses only `too_slow` and turns on `derandomize`, and Schemathesis
+# lets profile values that differ from Hypothesis's defaults override its own
+# config. So in CI the `filter_too_much` suppression from the toml was
+# silently replaced, and derandomized generation made the failure
+# deterministic once 3b changed the schema. An explicit @settings survives
+# that merge. `too_slow` stays suppressed as the ci profile intends; CI keeps
+# its reproducible, derandomized examples.
 @schema.parametrize()
+@settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 def test_app_conforms_to_its_openapi_schema(case):
     case.call_and_validate()

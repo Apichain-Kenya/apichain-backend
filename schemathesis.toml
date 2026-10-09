@@ -12,6 +12,10 @@
 # Phase 2 intermittent", captured on PR #12 (2026-10-07). Every example that
 # does get generated is still sent and still checked in full.
 suppress-health-check = ["filter_too_much"]
+# NOTE: under pytest in CI this line is overridden by Hypothesis's `ci`
+# profile, so tests/test_contract.py restates the suppression with an
+# explicit @settings. Keep the two in step. This line still governs local
+# runs and the schemathesis CLI.
 #
 # Only one narrow exemption, and it is a schema-expressiveness limit rather
 # than an app defect: bcrypt refuses a password longer than 72 **bytes**, so
