@@ -1,4 +1,6 @@
-from pydantic import field_validator
+from typing import Literal
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.enums import AnchorTarget
@@ -44,6 +46,62 @@ class Settings(BaseSettings):
     anchor_max_rows: int = 10_000  # bounds one run's tree; the run stays contiguous
     ots_calendar_urls: str = "https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org"
     ots_timeout_seconds: int = 10
+
+    # Media pipeline (P3b-D, 11 §7). Every default is either the real dev
+    # service compose runs or fail-closed; a fake is always an explicit opt-in
+    # and is stamped on every row it touches (11 D4).
+    storage_backend: Literal["s3", "fake"] = "s3"
+    s3_endpoint: str = "localhost:9000"
+    # What a browser can reach. Presigned URLs bind their host, so they are
+    # signed for this, never for the in-cluster endpoint.
+    s3_public_endpoint: str = "localhost:9000"
+    s3_bucket: str = "apichain-documents"
+    s3_access_key: str = "apichain"
+    s3_secret_key: str = "apichain-dev"
+    s3_secure: bool = False
+    signed_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    max_file_bytes: int = 10 * 1024 * 1024  # 04 §5.6
+    max_subject_bytes: int = 50 * 1024 * 1024  # 04 §5.6
+
+    # Fail-closed: with no clamd reachable, uploads answer 503 and store
+    # nothing. A box without Docker sets scanner_backend=fake on purpose.
+    scanner_backend: Literal["clamd", "fake"] = "clamd"
+    clamd_host: str = "localhost"
+    clamd_port: int = 3310
+    clamd_timeout_seconds: float = 30.0
+
+    # Communications (P3b-D, 11 §8). SMS defaults to the log-only fake because
+    # no Africa's Talking credentials exist; email defaults to compose Mailpit.
+    sms_backend: Literal["africastalking", "fake"] = "fake"
+    at_username: str = "sandbox"
+    at_api_key: str = ""
+    at_sender_id: str | None = None
+    at_sandbox: bool = True
+    at_timeout_seconds: float = 10.0
+    # The log-only fakes redact recipients and mask digits unless this is set.
+    # Dev machines only: it puts verification codes in the log.
+    dev_log_message_bodies: bool = False
+    email_backend: Literal["smtp", "fake"] = "smtp"
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from: str = "ApiChain <no-reply@apichain.local>"
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = False
+    smtp_timeout_seconds: float = 10.0
+
+    # Verification codes (P3b-G). The pepper keys the stored HMAC; like
+    # jwt_secret_key, the default is dev-only and production reads it from the
+    # secret store (Phase 5).
+    verification_code_pepper: str = "dev-only-verification-pepper-change-me"
+
+    # Milestone worker (P3b-H, 11 D8).
+    comms_enabled: bool = True
+    comms_interval_seconds: int = 60
+    comms_lookback_hours: int = 72
+    comms_batch_size: int = 50
+    comms_max_attempts: int = 3
+    comms_claim_timeout_seconds: int = 300
 
     @field_validator("ots_calendar_urls")
     @classmethod

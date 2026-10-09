@@ -41,7 +41,7 @@ class AnchorProofEntry(BaseModel):
 class AnchorProofResponse(BaseModel):
     batch_id: int  # read by scripts/verify_anchor.py; the route is keyed by public_id
     public_id: str
-    batch_code: str
+    # No `batch_code` on this anonymous view (11 D11); see BatchVerifyResponse.
     # The weakest entry's state, so a client can render one badge without
     # walking the list: `partial` means some records are anchored and some are
     # still only in our log.

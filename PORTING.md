@@ -113,3 +113,47 @@ Pending later-phase ports (read v1 first): `models/document.py` (Phase 3b media
 pipeline); `environmental_data` and `geo_ai` (only with `origin_verification`,
 gated on the real-data partnership); PostGIS `Geography` (with the geo-mapping
 UI).
+
+## Phase 3b (media pipeline + communications)
+
+Little here is ported: v1 had a bare file upload and no communications module.
+Most of the phase is new, and it is listed below so that nobody later looks for
+a v1 original that does not exist.
+
+| v1 source | v2 destination | Verbatim/adapted | Parity evidence |
+|---|---|---|---|
+| `models/document.py` (`file_path`, `doc_type`, `farmer_id`) | `app/models/media.py` `Document` | **Rewritten.** v1 stored a local path named `{farmer_id}_{original_filename}` and nothing else. v2 stores a sha256 `content_hash`, the **sniffed** MIME type, size, scan result and engine, and a content-addressed `object_key`; the original name is kept only as sanitized metadata (`pii: identity`). `farmer_id` generalizes to `(subject_type, subject_id)`. Unique per (subject, hash), not per hash (11 D3) | `tests/test_phase3b_models.py`, `tests/test_documents.py` |
+| `routers/farmers.py` `upload_document` (Sprint 7 role allowlist + ownership check) | `app/routers/documents.py` | **Adapted.** The Sprint 7 ownership check is carried forward via `ownership.assert_acts_for_farmer`. Everything `04` §1.4 says v1 lacked is new: content addressing, a MIME allowlist by magic bytes, size and per-farmer quota, antivirus (fail-closed), the consent gate, and signed expiring URLs | `tests/test_documents.py::test_a_farmer_cannot_touch_another_farmers_documents` and the rest of that file |
+| `uploads/farmers/` local filesystem | MinIO / S3 (`app/services/storage.py`) | **Not ported.** It is the flaw `04` §3.4 rejects | — |
+| v1 OTP-login (removed in v1 iteration 1) | — | **Not reintroduced.** v2's codes are an enrolment *verification* step, never a login (`04` §3.5) | `tests/test_verifications.py` |
+
+**Notes that do not fit a row:**
+
+- **Consent semantics changed (P3b-B).** `require_consent` used to pick the
+  newest *granted* row, so a withdrawal was invisible to the gate. Now the
+  newest row for (subject, purpose) decides. A grant by staff cannot override
+  the farmer's own latest withdrawal (409 `withdrawn_by_farmer`); both points
+  came from the background security review.
+- **`batch_code` left the anonymous views (P3b-A, 11 D11).** Clients may supply
+  it as free text, and no format rule separates a code from a phone number.
+  Staff responses keep it; the offline verifier prints `public_id` instead.
+- **`error_responses(422)` documents two envelopes.** Declaring 422 replaced
+  FastAPI's default schema, so a malformed body violated the contract until
+  the declaration accepted FastAPI's validation body too.
+- **Upload bodies are bounded before parsing.** FastAPI spools a whole
+  multipart body before any handler runs, so the `UploadSizeLimit` middleware
+  refuses an oversized body from its `Content-Length`, or mid-stream if it is
+  chunked.
+
+**New in v2 (no v1 origin):**
+- `app/services/{media,phone,storage,scanner,sms,mailer,dev_fakes}.py`: pure
+  checks and the four external boundaries, each with a fake (11 D4).
+- `app/services/{comms,comms_templates,comms_worker,verification_codes}.py`:
+  the single send path, frozen versioned templates (11 D9), the
+  audit-derived milestone worker (11 D8), and HMAC'd verification codes with a
+  minimal per-subject limiter (11 D13).
+- `app/routers/{documents,verifications}.py`, the consent endpoints in
+  `app/routers/farmers.py`, `app/middleware/body_limit.py`.
+- Tables `documents`, `communications` and `verification_codes`; enums
+  `scan_status`, `comm_channel`, `comm_purpose` and `comm_status`;
+  `farmers.phone_verified_at` / `email_verified_at`; migration `a3b7c9d1e2f4`.

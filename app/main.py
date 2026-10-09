@@ -10,8 +10,9 @@ from sqlalchemy.exc import DataError
 from app.config import settings
 from app.database import SessionLocal
 from app.errors import APIError, api_error_handler, data_error_handler
+from app.middleware.body_limit import UploadSizeLimit
 from app.routers import v2_router
-from app.services import anchoring, integrity
+from app.services import anchoring, comms_worker, integrity
 
 logger = logging.getLogger("apichain")
 
@@ -45,6 +46,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 seconds=settings.anchor_upgrade_interval_seconds,
                 id="anchor_upgrade",
             )
+        if settings.comms_enabled:
+            # Milestone notifications, derived from audit rows (P3b-H, 11 D8).
+            scheduler.add_job(
+                lambda: comms_worker.run(SessionLocal),
+                "interval",
+                seconds=settings.comms_interval_seconds,
+                id="comms_milestones",
+            )
         scheduler.start()
         logger.info(
             "scheduler started (anchoring %s)",
@@ -75,6 +84,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Bounds what the server will receive on the upload route at all: FastAPI
+# spools a whole multipart body before any handler runs (P3b-E).
+app.add_middleware(UploadSizeLimit)
 
 app.include_router(v2_router)
 

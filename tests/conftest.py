@@ -24,6 +24,7 @@ from alembic import command
 # Every new table must be added here AND in test_contract.py, or rows leak
 # between tests in ways that only show up in a full run.
 _ALL_TABLES = (
+    "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "
@@ -35,6 +36,12 @@ _ALL_TABLES = (
 def _disable_scheduler():
     """Keep the background integrity scheduler off during tests (P1-G)."""
     app.config.settings.scheduler_enabled = False
+    # No test reaches MinIO, ClamAV, Africa's Talking or SMTP (11 D4). Tests
+    # that need to inspect a boundary inject their own fake.
+    app.config.settings.storage_backend = "fake"
+    app.config.settings.scanner_backend = "fake"
+    app.config.settings.sms_backend = "fake"
+    app.config.settings.email_backend = "fake"
     yield
 
 
@@ -81,12 +88,30 @@ def db(migrated_engine):
         conn.close()
 
 
+class Boundaries:
+    """The four external boundaries as fakes a test can inspect (11 D4)."""
+
+    def __init__(self) -> None:
+        from tests.fakes import FakeObjectStore, FakeScanner, RecordingEmail, RecordingSms
+
+        self.store = FakeObjectStore()
+        self.scanner = FakeScanner()
+        self.sms = RecordingSms()
+        self.email = RecordingEmail()
+
+
 @pytest.fixture
-def client(migrated_engine):
+def boundaries():
+    return Boundaries()
+
+
+@pytest.fixture
+def client(migrated_engine, boundaries):
     """TestClient with get_db bound to the migrated DB (endpoints commit for
     real); all spine tables are truncated after each test for isolation."""
     from app.database import get_db
     from app.main import app
+    from app.routers._boundaries import get_email, get_object_store, get_scanner, get_sms
 
     testing_session = sessionmaker(bind=migrated_engine, autoflush=False, autocommit=False)
 
@@ -98,6 +123,10 @@ def client(migrated_engine):
             s.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_object_store] = lambda: boundaries.store
+    app.dependency_overrides[get_scanner] = lambda: boundaries.scanner
+    app.dependency_overrides[get_sms] = lambda: boundaries.sms
+    app.dependency_overrides[get_email] = lambda: boundaries.email
     try:
         yield TestClient(app)
     finally:

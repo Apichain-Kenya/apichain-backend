@@ -70,7 +70,6 @@ def batch_anchor_proof(
     return AnchorProofResponse(
         batch_id=batch.id,
         public_id=batch.public_id,
-        batch_code=batch.batch_code,
         status=anchor_proof.rollup(entries),  # type: ignore[arg-type]
         entries=[
             AnchorProofEntry(
@@ -124,7 +123,6 @@ def verify_batch(
     return BatchVerifyResponse(
         batch_id=batch.id,
         public_id=batch.public_id,
-        batch_code=batch.batch_code,
         state=str(batch.state),
         metadata=(
             MetadataPublic.model_validate(result.metadata) if result.metadata is not None else None

@@ -7,7 +7,7 @@ not, so any farmer's token could mutate any farmer's record. That is still
 unpatched in the deployed v1 system; it is not repeated here.
 """
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.errors import APIError, error_responses
 from app.models import ApiaryLocation, Farmer, User
 from app.routers._context import request_context
 from app.schemas.apiaries import ApiaryCreateRequest, ApiaryResponse
+from app.schemas.common import IdempotencyKeyHeader
 from app.services import audit_log, idempotency, ownership
 
 router = APIRouter(prefix="/apiaries", tags=["apiaries"])
@@ -34,7 +35,7 @@ def create_apiary(
     request: Request,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_create),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> ApiaryResponse | JSONResponse:
     idem = idempotency.begin(
         db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")

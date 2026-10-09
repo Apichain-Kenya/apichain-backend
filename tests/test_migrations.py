@@ -30,8 +30,21 @@ SPINE_TABLES = {
     "refresh_tokens",
     "idempotency_keys",
     "merkle_anchor",
+    "documents",
+    "communications",
+    "verification_codes",
 }
-ENUM_TYPES = {"role", "batch_state", "consent_purpose", "granted_via", "anchor_target"}
+ENUM_TYPES = {
+    "role",
+    "batch_state",
+    "consent_purpose",
+    "granted_via",
+    "anchor_target",
+    "scan_status",
+    "comm_channel",
+    "comm_purpose",
+    "comm_status",
+}
 
 
 @pytest.fixture

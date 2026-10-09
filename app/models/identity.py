@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 from app.enums import Role
+from app.models.types import UtcDateTime
 
 
 class User(Base):
@@ -52,4 +53,8 @@ class Farmer(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     # The field officer who enrolled them (04 §5.3).
     enrolled_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # Set when a verification code sent to that contact is confirmed (P3b-G).
+    # Verification, never login (04 §3.5).
+    phone_verified_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    email_verified_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

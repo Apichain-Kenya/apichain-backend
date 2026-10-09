@@ -7,6 +7,13 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://apichain:apichain@db:5432/apichain_v2
+      # Phase 3b boundaries, pointed at the services below. Presigned URLs
+      # are signed for the browser-reachable host, not the in-cluster one.
+      S3_ENDPOINT: minio:9000
+      S3_PUBLIC_ENDPOINT: localhost:9000
+      SMTP_HOST: mail
+      SMTP_PORT: "1025"
+      CLAMD_HOST: clamav
     volumes:
       - ./app:/srv/app # dev reload mount
     command:
@@ -48,6 +55,17 @@ services:
   mail:
     image: axllent/mailpit
     ports: ["8025:8025", "1025:1025"] # UI :8025, SMTP :1025
+
+  # Antivirus for document uploads (P3b, 11 D5). Behind a profile because the
+  # signature database is a few hundred MB and the first start takes minutes:
+  #   docker compose --profile av up
+  # Without it, uploads answer 503 (the scanner fails closed). On a machine
+  # with no Docker, set SCANNER_BACKEND=fake in .env on purpose; rows scanned
+  # that way are stamped scan_engine='fake' forever. CI never needs it.
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: ["av"]
+    ports: ["3310:3310"]
 
 volumes:
   pgdata:

@@ -159,12 +159,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{BAD} no entry for audit id {args.audit_id} in this bundle")
             return 1
 
-    code, batch_id, status = (
-        bundle.get("batch_code"),
+    public_id, batch_id, status = (
+        bundle.get("public_id"),
         bundle.get("batch_id"),
         bundle.get("status"),
     )
-    print(f"batch {code} (id {batch_id}), status: {status}")
+    print(f"batch {public_id} (id {batch_id}), status: {status}")
     results = [_check_entry(entry, args.block_merkle_root) for entry in entries]
     checked = [r for r in results if r is not None]
 
