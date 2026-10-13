@@ -7,6 +7,7 @@ Vocabulary, fixed here so neither side invents a third one: conformance is
 (Phase 4, `03` §1, §6), and there is no blended score anywhere (`02` §4).
 """
 
+import datetime as dt
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -33,6 +34,7 @@ class StageVerificationOut(BaseModel):
     anchor_status: EntryStatus | None
     payload_precision: Literal["exact", "reduced"]
     redacted_fields: list[str]
+    recorded_on: dt.date | None  # the day the stage was recorded (UTC)
 
 
 class StageVerifications(BaseModel):
@@ -74,6 +76,9 @@ class BatchVerifyResponse(BaseModel):
     public_id: str
     # No `batch_code`: clients may supply it as free text, so a name or phone
     # typed there would reach every jar scan (11 D11). `public_id` is the key.
+    # Locality label for the jar's hero (12 D12): derived from coordinates
+    # rounded to 2 dp, never the hive point itself. Null if the lookup failed.
+    place: str | None
     state: str
     # The farmer's declaration in display form (no free text).
     metadata: MetadataPublic | None

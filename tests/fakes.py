@@ -149,3 +149,16 @@ class RecordingEmail:
             raise SendFailed("provider_unreachable")
         self.sent.append((to, subject, body))
         return f"<mail-{len(self.sent)}@test>"
+
+
+class RecordingGeocoder:
+    """The apiary locality lookup (12 D12). Records what it was asked, so a
+    test can assert the exact hive point never reached it."""
+
+    def __init__(self, answer: str | None = None) -> None:
+        self.answer = answer
+        self.calls: list[tuple] = []
+
+    def __call__(self, latitude, longitude):
+        self.calls.append((latitude, longitude))
+        return self.answer

@@ -38,9 +38,9 @@ _FARMER_ID = Path(ge=1, le=2_147_483_647)
 def enroll_farmer(
     body: FarmerEnrollRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_enroll),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> FarmerResponse | JSONResponse:
     idem = idempotency.begin(
         db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
@@ -132,10 +132,10 @@ def _farmer_or_404(db: Session, farmer_id: int) -> Farmer:
 def record_farmer_consent(
     body: ConsentRecordRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     farmer_id: int = _FARMER_ID,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_consent_action),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> ConsentResponse | JSONResponse:
     """Grant or withdraw one consent purpose (03 §7, 11 §5).
 

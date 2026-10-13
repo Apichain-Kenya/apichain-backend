@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.errors import APIError, error_responses
-from app.models import HoneyBatch
+from app.models import ApiaryLocation, ApiaryRecord, HoneyBatch
 from app.schemas.anchor import AnchorProofEntry, AnchorProofResponse, ProofStepOut
 from app.schemas.batches import MetadataPublic
 from app.schemas.verify import (
@@ -123,6 +123,7 @@ def verify_batch(
     return BatchVerifyResponse(
         batch_id=batch.id,
         public_id=batch.public_id,
+        place=_place(db, batch.id),
         state=str(batch.state),
         metadata=(
             MetadataPublic.model_validate(result.metadata) if result.metadata is not None else None
@@ -136,3 +137,12 @@ def verify_batch(
         conformance=conformance,
         anchor_status=result.anchor_status,  # type: ignore[arg-type]
     )
+
+
+def _place(db: Session, batch_id: int) -> str | None:
+    """The locality label of the apiary this batch was recorded against."""
+    return db.execute(
+        select(ApiaryLocation.locality)
+        .join(ApiaryRecord, ApiaryRecord.apiary_id == ApiaryLocation.id)
+        .where(ApiaryRecord.batch_id == batch_id)
+    ).scalar_one_or_none()

@@ -16,6 +16,7 @@ from app.routers import (
 v2_router = APIRouter(prefix="/v2")
 v2_router.include_router(meta.router)
 v2_router.include_router(auth.router)
+v2_router.include_router(auth.me_router)
 v2_router.include_router(farmers.router)
 v2_router.include_router(documents.router)
 v2_router.include_router(verifications.router)

@@ -37,6 +37,13 @@ ACTION_ROLES: dict[str, set[Role]] = {
     "farmer.verify_contact": {Role.farmer, Role.field_officer, Role.admin},
     "farmer.confirm_contact": {Role.farmer, Role.field_officer, Role.admin},
     "apiary.create": {Role.farmer, Role.field_officer, Role.admin},
+    # Reads exact hive coordinates, which are sensitive PII (03 §8.1, 12 D17):
+    # the owner and the staff who enrol them, not operators or lab officers.
+    # Admits a farmer, so the route calls ownership.assert_acts_for_farmer.
+    "apiary.read": {Role.farmer, Role.field_officer, Role.admin},
+    # Every role reads batches; a farmer only their own (ownership check in
+    # the route). The apiary point is withheld from operators and lab officers.
+    "batch.read": {Role.farmer, Role.field_officer, Role.operator, Role.lab_officer, Role.admin},
     "batch.create": {Role.farmer, Role.operator, Role.admin},
     # A farmer self-registers their own harvest (04 §5.3); the remaining four
     # transitions are staff actions. Attribution for all of them lives in

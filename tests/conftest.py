@@ -42,6 +42,7 @@ def _disable_scheduler():
     app.config.settings.scanner_backend = "fake"
     app.config.settings.sms_backend = "fake"
     app.config.settings.email_backend = "fake"
+    app.config.settings.geocoder_backend = "none"
     yield
 
 
@@ -92,17 +93,43 @@ class Boundaries:
     """The four external boundaries as fakes a test can inspect (11 D4)."""
 
     def __init__(self) -> None:
-        from tests.fakes import FakeObjectStore, FakeScanner, RecordingEmail, RecordingSms
+        from tests.fakes import (
+            FakeObjectStore,
+            FakeScanner,
+            RecordingEmail,
+            RecordingGeocoder,
+            RecordingSms,
+        )
 
         self.store = FakeObjectStore()
         self.scanner = FakeScanner()
         self.sms = RecordingSms()
         self.email = RecordingEmail()
+        self.geocoder = RecordingGeocoder()
 
 
 @pytest.fixture
 def boundaries():
     return Boundaries()
+
+
+class _PwaLikeClient(TestClient):
+    """A TestClient that behaves like the Phase 4 PWA (12 D7).
+
+    The PWA always sends an `Idempotency-Key` on a write, so this client adds
+    a fresh one to any POST that does not set its own. Tests that exercise
+    replay set the header explicitly and are untouched. The base URL is https
+    so the `Secure` refresh cookie round-trips (12 D3). A test that needs a
+    write *without* a key builds a bare `TestClient`.
+    """
+
+    def request(self, method, url, *args, **kwargs):  # type: ignore[override]
+        if method.upper() == "POST":
+            headers = dict(kwargs.get("headers") or {})
+            if not any(k.lower() == "idempotency-key" for k in headers):
+                headers["Idempotency-Key"] = str(uuid.uuid4())
+            kwargs["headers"] = headers
+        return super().request(method, url, *args, **kwargs)
 
 
 @pytest.fixture
@@ -111,7 +138,13 @@ def client(migrated_engine, boundaries):
     real); all spine tables are truncated after each test for isolation."""
     from app.database import get_db
     from app.main import app
-    from app.routers._boundaries import get_email, get_object_store, get_scanner, get_sms
+    from app.routers._boundaries import (
+        get_email,
+        get_geocoder,
+        get_object_store,
+        get_scanner,
+        get_sms,
+    )
 
     testing_session = sessionmaker(bind=migrated_engine, autoflush=False, autocommit=False)
 
@@ -127,8 +160,9 @@ def client(migrated_engine, boundaries):
     app.dependency_overrides[get_scanner] = lambda: boundaries.scanner
     app.dependency_overrides[get_sms] = lambda: boundaries.sms
     app.dependency_overrides[get_email] = lambda: boundaries.email
+    app.dependency_overrides[get_geocoder] = lambda: boundaries.geocoder
     try:
-        yield TestClient(app)
+        yield _PwaLikeClient(app, base_url="https://testserver")
     finally:
         app.dependency_overrides.clear()
         with migrated_engine.begin() as conn:

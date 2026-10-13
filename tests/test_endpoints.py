@@ -118,27 +118,34 @@ def test_create_batch_for_unknown_farmer_is_404(client, migrated_engine):
 
 
 def test_login_refresh_rotation_and_reuse_detection(client, migrated_engine):
+    # The refresh token is cookie-only since P4a-A (12 D3); see
+    # test_phase4a_auth.py for the cookie's attributes and the reuse window.
     _seed_user(migrated_engine, Role.operator, "+254700000006", password="hunter2")
+    cookie, hdr = "__Secure-apichain_rt", {"X-ApiChain-Client": "pwa"}
+
+    def refresh(raw):
+        client.cookies.clear()
+        return client.post("/v2/auth/refresh", headers=hdr, cookies={cookie: raw})
 
     login = client.post(
         "/v2/auth/login", json={"identifier": "+254700000006", "password": "hunter2"}
     )
     assert login.status_code == 200, login.text
-    tokens = login.json()
-    assert tokens["access_token"] and tokens["refresh_token"]
+    assert login.json()["access_token"]
+    a = login.cookies[cookie]
 
-    rotated = client.post("/v2/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
-    assert rotated.status_code == 200
-    new_tokens = rotated.json()
+    b_res = refresh(a)
+    assert b_res.status_code == 200
+    b = b_res.cookies[cookie]
+    c = refresh(b).cookies[cookie]  # b was used, so a can no longer be a lost reply
 
     # Replaying the spent refresh token is detected and revokes the family.
-    reuse = client.post("/v2/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    reuse = refresh(a)
     assert reuse.status_code == 401
     assert reuse.json()["code"] == "token_reuse"
 
     # The freshly issued token is now revoked too.
-    after = client.post("/v2/auth/refresh", json={"refresh_token": new_tokens["refresh_token"]})
-    assert after.status_code == 401
+    assert refresh(c).status_code == 401
 
 
 def test_login_with_wrong_password_is_401(client, migrated_engine):

@@ -3,6 +3,7 @@
 import datetime as dt
 import enum
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -102,3 +103,82 @@ class MetadataPublic(BaseModel):
     harvest_window_start: dt.date
     harvest_window_end: dt.date
     apiary_management_method: str
+
+
+# --- Reads (P4a-B, 12 §6) ------------------------------------------------------
+
+
+class BatchSummary(BaseModel):
+    """One row of `GET /v2/batches`. No anchor status here: computing it means
+    building Merkle paths per batch, and the list is for finding a batch, not
+    proving it. The detail view carries it."""
+
+    id: int
+    public_id: str
+    batch_code: str
+    state: str
+    honey_type: str | None
+    apiary_name: str | None
+    created_at: dt.datetime
+    state_updated_at: dt.datetime
+
+
+class BatchPage(BaseModel):
+    items: list[BatchSummary]
+    # Opaque to the client; pass it back as `cursor` for the next page.
+    next_cursor: str | None
+
+
+class BatchMetadataOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    honey_type: str
+    expected_yield_kg: Decimal
+    harvest_window_start: dt.date
+    harvest_window_end: dt.date
+    apiary_management_method: str
+    notes: str | None
+
+
+class BatchApiaryOut(BaseModel):
+    """The apiary a batch was recorded against. The exact point is shown only
+    to the owner, field officers and admins (12 D17); for everyone else the
+    coordinates are null and `location_withheld` says why."""
+
+    apiary_id: int
+    name: str
+    locality: str | None
+    latitude: Decimal | None
+    longitude: Decimal | None
+    hive_count: int | None
+    location_withheld: bool
+
+
+class BatchStageOut(BaseModel):
+    """One audit row for this batch: what happened, when, and who did it. The
+    actor is what lets the console show an admin acting in another role's
+    place (03 §13.1)."""
+
+    audit_id: int
+    action: str
+    recorded_at: dt.datetime
+    actor_id: int | None
+    actor_role: str
+    actor_display_name: str | None
+    payload_hash: str  # hex
+    anchor_status: Literal["pending", "anchored", "confirmed"]
+
+
+class BatchDetail(BaseModel):
+    id: int
+    public_id: str
+    batch_code: str
+    farmer_id: int
+    state: str
+    created_at: dt.datetime
+    state_updated_at: dt.datetime
+    metadata: BatchMetadataOut | None
+    apiary: BatchApiaryOut | None
+    stages: list[BatchStageOut]
+    conformance_verdict: Literal["pass", "fail", "incomplete"] | None
+    anchor_status: Literal["pending", "partial", "anchored", "confirmed"]

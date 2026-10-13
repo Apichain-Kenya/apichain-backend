@@ -9,7 +9,7 @@ deploy so that turning it on later is a checklist, not a design exercise:
 
 | File | What it is | State |
 |------|-----------|-------|
-| `.do/app.yaml` | DigitalOcean App Platform spec (service, health check, DB/migration blocks) | Template — DB + secrets commented out, untested |
+| `.do/app.yaml` | DigitalOcean App Platform spec for **one app**: the client static site at `/` and this API at `/v2` (12 D4, same origin is required for the refresh cookie) | Template — DB + secrets commented out, untested |
 | `.github/workflows/deploy.yml` | CD workflow, push-to-`main` → DO deploy | Inert — deploy job gated on `vars.DEPLOY_ENABLED == 'true'` (unset) |
 
 Both are safe to have committed: CI stays green with no secret set, and nothing

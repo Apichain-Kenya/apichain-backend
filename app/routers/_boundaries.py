@@ -8,7 +8,7 @@ once per process.
 
 from functools import cache
 
-from app.services import mailer, scanner, sms, storage
+from app.services import geocode, mailer, scanner, sms, storage
 
 
 @cache
@@ -29,3 +29,8 @@ def get_sms() -> sms.SmsSender:
 @cache
 def get_email() -> mailer.EmailSender:
     return mailer.from_settings()
+
+
+@cache
+def get_geocoder() -> geocode.Geocoder:
+    return geocode.from_settings()
