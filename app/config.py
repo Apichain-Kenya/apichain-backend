@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30
+    # A lost refresh response may be retried with the old token for this long
+    # (12 D5). Short on purpose: a stolen token replayed later still trips reuse.
+    refresh_reuse_window_seconds: int = 60
     bcrypt_rounds: int = 12
 
     # Audit-chain integrity check (P1-G). The scheduler is disabled in tests.

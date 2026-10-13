@@ -33,9 +33,9 @@ _require_create = requires("apiary.create")
 def create_apiary(
     body: ApiaryCreateRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_create),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> ApiaryResponse | JSONResponse:
     idem = idempotency.begin(
         db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")

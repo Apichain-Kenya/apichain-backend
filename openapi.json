@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "AccessTokenResponse": {
+        "description": "Login and refresh return only the short-lived access token. The refresh\ntoken travels in an HttpOnly cookie and never in a body (12 D3).",
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in"
+        ],
+        "title": "AccessTokenResponse",
+        "type": "object"
+      },
       "AnchorHealthResponse": {
         "description": "Anchor lag, for the uptime check and the Phase 5 alarms (05 \u00a73.6).",
         "properties": {
@@ -1522,18 +1546,39 @@
         "title": "LoginRequest",
         "type": "object"
       },
-      "LogoutRequest": {
+      "MeResponse": {
+        "description": "Who the bearer is (12 \u00a75). `farmer_id` is what a farmer's client needs\nto build its own apiary and batch writes; it is null for staff.",
         "properties": {
-          "refresh_token": {
-            "pattern": "^[^\\x00]*$",
-            "title": "Refresh Token",
+          "display_name": {
+            "title": "Display Name",
             "type": "string"
+          },
+          "farmer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Farmer Id"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
           }
         },
         "required": [
-          "refresh_token"
+          "user_id",
+          "role",
+          "display_name",
+          "farmer_id"
         ],
-        "title": "LogoutRequest",
+        "title": "MeResponse",
         "type": "object"
       },
       "MetadataPublic": {
@@ -1696,20 +1741,6 @@
         "title": "ProofStepOut",
         "type": "object"
       },
-      "RefreshRequest": {
-        "properties": {
-          "refresh_token": {
-            "pattern": "^[^\\x00]*$",
-            "title": "Refresh Token",
-            "type": "string"
-          }
-        },
-        "required": [
-          "refresh_token"
-        ],
-        "title": "RefreshRequest",
-        "type": "object"
-      },
       "RequestValidationErrorResponse": {
         "description": "FastAPI's own 422 body for a request that fails schema validation.\n\nA route that also raises a *domain* 422 (`consent_required`,\n`invalid_code`, ...) declares 422 itself, which replaces FastAPI's default\n422 schema. Without this second shape the declaration would then promise\nonly the envelope, and every malformed body would violate the contract\n(P3b-B: Schemathesis sent a lone NUL byte as a body and found exactly that).",
         "properties": {
@@ -1727,6 +1758,18 @@
         ],
         "title": "RequestValidationErrorResponse",
         "type": "object"
+      },
+      "Role": {
+        "description": "The four canonical actors plus admin (04 \u00a75.3).",
+        "enum": [
+          "farmer",
+          "field_officer",
+          "operator",
+          "lab_officer",
+          "admin"
+        ],
+        "title": "Role",
+        "type": "string"
       },
       "ScanStatus": {
         "description": "Antivirus outcome for a stored document (04 \u00a75.6, 11 D5).\n\nOnly `clean` is written in 3b, because the upload scans synchronously and\nstores nothing that fails. `infected` and `pending` exist so a later rescan\njob has somewhere to put its answer without an `ALTER TYPE`.",
@@ -1968,29 +2011,6 @@
         "title": "StatusResponse",
         "type": "object"
       },
-      "TokenPair": {
-        "properties": {
-          "access_token": {
-            "title": "Access Token",
-            "type": "string"
-          },
-          "refresh_token": {
-            "title": "Refresh Token",
-            "type": "string"
-          },
-          "token_type": {
-            "default": "bearer",
-            "title": "Token Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "access_token",
-          "refresh_token"
-        ],
-        "title": "TokenPair",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -2147,19 +2167,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -2300,7 +2313,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TokenPair"
+                  "$ref": "#/components/schemas/AccessTokenResponse"
                 }
               }
             },
@@ -2339,16 +2352,40 @@
     "/v2/auth/logout": {
       "post": {
         "operationId": "logout_v2_auth_logout_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogoutRequest"
-              }
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-ApiChain-Client",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Apichain-Client"
             }
           },
-          "required": true
-        },
+          {
+            "in": "cookie",
+            "name": "__Secure-apichain_rt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Secure-Apichain Rt"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2362,6 +2399,16 @@
           },
           "400": {
             "description": "Malformed request body"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -2383,22 +2430,46 @@
     "/v2/auth/refresh": {
       "post": {
         "operationId": "refresh_v2_auth_refresh_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshRequest"
-              }
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-ApiChain-Client",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Apichain-Client"
             }
           },
-          "required": true
-        },
+          {
+            "in": "cookie",
+            "name": "__Secure-apichain_rt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Secure-Apichain Rt"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TokenPair"
+                  "$ref": "#/components/schemas/AccessTokenResponse"
                 }
               }
             },
@@ -2416,6 +2487,16 @@
               }
             },
             "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -2441,19 +2522,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -2562,19 +2636,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -2683,19 +2750,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -2804,19 +2864,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -2925,19 +2978,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -3046,19 +3092,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -3265,19 +3304,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -3457,19 +3489,12 @@
           {
             "in": "header",
             "name": "Idempotency-Key",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 255,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
             }
           }
         ],
@@ -4004,6 +4029,45 @@
         "summary": "Confirm Verification Code",
         "tags": [
           "verifications"
+        ]
+      }
+    },
+    "/v2/me": {
+      "get": {
+        "operationId": "me_v2_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "auth"
         ]
       }
     },

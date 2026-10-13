@@ -80,9 +80,9 @@ def _generate_batch_code() -> str:
 def create_batch(
     body: BatchCreateRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     db: Session = Depends(get_db),
     actor: User = Depends(_require_create),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> BatchResponse | JSONResponse:
     idem = idempotency.begin(
         db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
@@ -204,10 +204,10 @@ def create_batch(
 def record_harvest(
     body: HarvestRecordRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_harvest),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S0 -> S1."""
     return stage_writer.record_stage(
@@ -241,10 +241,10 @@ def record_harvest(
 def record_process(
     body: ProcessRecordRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_process),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S1 -> S2."""
     return stage_writer.record_stage(
@@ -308,10 +308,10 @@ def _score_and_record_conformance(db: Session, row: LabResult) -> dict[str, obje
 def record_lab_result(
     body: LabResultRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_lab),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S2 -> S3, and the only transition that produces a judgement.
 
@@ -358,10 +358,10 @@ def record_lab_result(
 def record_packaging(
     body: PackagingRecordRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_package),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S3 -> S4."""
     return stage_writer.record_stage(
@@ -392,10 +392,10 @@ def record_packaging(
 def record_distribution(
     body: DistributionRecordRequest,
     request: Request,
+    idempotency_key: IdempotencyKeyHeader,
     batch_id: int = Path(ge=1, le=_MAX_INT4),
     db: Session = Depends(get_db),
     actor: User = Depends(_require_distribute),
-    idempotency_key: IdempotencyKeyHeader = None,
 ) -> StageRecordedResponse | JSONResponse:
     """S4 -> S5. Terminal: `transitions` gives DISTRIBUTED no successor, so
     every transition endpoint refuses a distributed batch, this one included."""

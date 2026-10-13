@@ -5,11 +5,17 @@ row `rotated_to` the new one. Reuse: presenting a token that was already rotated
 or revoked is treated as compromise — every refresh token for that user is
 revoked (a safe, if blunt, response; per-session families can come later with a
 family_id column). Logout revokes only the presented token.
+
+One narrow exception (12 D5): a token rotated out in the last
+`refresh_reuse_window_seconds`, whose successor has never been presented, is
+treated as a lost response rather than theft. On 2G the server can rotate and
+the reply never arrive; without this the farmer is signed out everywhere.
 """
 
 from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -47,14 +53,35 @@ def _find(db: Session, raw: str) -> RefreshToken | None:
     ).scalar_one_or_none()
 
 
-def rotate(db: Session, raw: str) -> tuple[str, RefreshToken]:
+class Rotation(NamedTuple):
+    raw: str
+    row: RefreshToken
+    # True when this rotation went through the reuse window (12 D5): the
+    # caller audits it, because it is the one path where a spent token worked.
+    grace: bool
+
+
+def rotate(db: Session, raw: str) -> Rotation:
     row = _find(db, raw)
     if row is None:
         raise InvalidRefreshToken("unknown refresh token")
 
-    if row.rotated_to is not None or row.revoked_at is not None:
+    if row.revoked_at is not None:
         _revoke_all_for_user(db, row.user_id)
         raise ReuseDetected("refresh token replay detected")
+
+    grace = False
+    if row.rotated_to is not None:
+        if not _within_reuse_window(db, row.rotated_to):
+            _revoke_all_for_user(db, row.user_id)
+            raise ReuseDetected("refresh token replay detected")
+        # The phone never received the successor (a lost response), so it
+        # presents this token again. Retire the unused successor and issue a
+        # fresh one in its place; nobody else can hold it.
+        successor = db.get(RefreshToken, row.rotated_to)
+        assert successor is not None  # FK guarantees it
+        successor.revoked_at = _now()
+        grace = True
 
     if row.expires_at <= _now():
         raise InvalidRefreshToken("refresh token expired")
@@ -64,7 +91,28 @@ def rotate(db: Session, raw: str) -> tuple[str, RefreshToken]:
     new_raw, new_row = issue(db, user)
     row.rotated_to = new_row.id
     db.flush()
-    return new_raw, new_row
+    return Rotation(new_raw, new_row, grace)
+
+
+def _within_reuse_window(db: Session, successor_id: int) -> bool:
+    """True if the successor is still unused and was issued within the last
+    `refresh_reuse_window_seconds` (12 D5).
+
+    "Unused" means never rotated and never revoked: once the successor itself
+    has been presented, the old token coming back cannot be a lost response.
+    The age is compared inside Postgres, against the same clock that set
+    `issued_at` (its server default), never against Python's clock.
+    """
+    window = timedelta(seconds=settings.refresh_reuse_window_seconds)
+    found = db.execute(
+        select(RefreshToken.id).where(
+            RefreshToken.id == successor_id,
+            RefreshToken.rotated_to.is_(None),
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.issued_at >= func.localtimestamp() - window,
+        )
+    ).scalar_one_or_none()
+    return found is not None
 
 
 def revoke(db: Session, raw: str) -> None:

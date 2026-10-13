@@ -3,6 +3,7 @@
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.enums import Role
 from app.schemas.common import SafeStr
 
 
@@ -25,18 +26,23 @@ class LoginRequest(BaseModel):
     _pw = field_validator("password")(_within_bcrypt_limit)
 
 
-class TokenPair(BaseModel):
+class AccessTokenResponse(BaseModel):
+    """Login and refresh return only the short-lived access token. The refresh
+    token travels in an HttpOnly cookie and never in a body (12 D3)."""
+
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int  # seconds
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: SafeStr
+class MeResponse(BaseModel):
+    """Who the bearer is (12 §5). `farmer_id` is what a farmer's client needs
+    to build its own apiary and batch writes; it is null for staff."""
 
-
-class LogoutRequest(BaseModel):
-    refresh_token: SafeStr
+    user_id: int
+    role: Role
+    display_name: str
+    farmer_id: int | None
 
 
 class StatusResponse(BaseModel):

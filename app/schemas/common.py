@@ -58,6 +58,8 @@ Percentage = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("100"), decima
 # a `String` primary key, so an unbounded value was capped only by whatever
 # header limit the server happened to have. 255 is generous for a UUID or a
 # client-generated token and makes an oversized key an honest 422.
-IdempotencyKeyHeader = Annotated[
-    str | None, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-]
+# Required since P4a-A (12 D7), closing 08 D6's "honoured when present": the
+# Phase 4 PWA always sends one, and an optional key lets a client bug that
+# drops it lose duplicate protection without anyone noticing. Uploads and
+# verification sends take none (11 D6), so they never use this alias.
+IdempotencyKeyHeader = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=255)]
