@@ -2315,6 +2315,18 @@
             ],
             "title": "Recorded Hash"
           },
+          "recorded_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded On"
+          },
           "redacted_fields": {
             "items": {
               "type": "string"
@@ -2331,7 +2343,8 @@
           "match",
           "anchor_status",
           "payload_precision",
-          "redacted_fields"
+          "redacted_fields",
+          "recorded_on"
         ],
         "title": "StageVerificationOut",
         "type": "object"

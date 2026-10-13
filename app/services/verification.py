@@ -35,6 +35,7 @@ brute-force the hive's location back out.
 The server still compares, and reports the result as `match`.
 """
 
+import datetime as dt
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
@@ -180,6 +181,9 @@ class StageCheck:
     anchor_status: str | None
     payload_precision: Literal["exact", "reduced"]
     redacted_fields: list[str]
+    # The day the stage's audit row was written (UTC), for the consumer
+    # journey (12 §10). A day, not a timestamp: nothing finer is needed.
+    recorded_on: dt.date | None
 
 
 @dataclass(frozen=True)
@@ -265,13 +269,21 @@ def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
     status_of = {entry.audit_id: entry.status for entry in entries}
 
     recorded: dict[str, list[tuple[int, bytes, dict[str, Any]]]] = {}
-    for audit_id, action, payload_hash, payload_json in db.execute(
-        select(AuditLog.id, AuditLog.action, AuditLog.payload_hash, AuditLog.payload)
+    recorded_on: dict[int, dt.date] = {}
+    for audit_id, action, payload_hash, payload_json, created_at in db.execute(
+        select(
+            AuditLog.id,
+            AuditLog.action,
+            AuditLog.payload_hash,
+            AuditLog.payload,
+            AuditLog.created_at,
+        )
         .where(AuditLog.subject_type == "batch")
         .where(AuditLog.subject_id == subject_id)
         .order_by(AuditLog.id.asc())
     ).all():
         recorded.setdefault(action, []).append((audit_id, payload_hash, payload_json))
+        recorded_on[audit_id] = created_at.date()
 
     conformance_row = db.execute(
         select(CodexConformance).where(CodexConformance.batch_id == batch.id)
@@ -323,6 +335,7 @@ def verify_batch(db: Session, batch: HoneyBatch) -> BatchVerification:
             anchor_status=status_of.get(audit_id) if audit_id is not None else None,
             payload_precision="reduced" if reduced else "exact",
             redacted_fields=redacted,
+            recorded_on=recorded_on.get(audit_id) if audit_id is not None else None,
         )
 
     return BatchVerification(

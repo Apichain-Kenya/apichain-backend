@@ -350,3 +350,17 @@ def test_consumer_fixtures_cover_the_four_trust_states(client, migrated_engine):
         (FIXTURES / f"{name}.json").write_text(
             json.dumps(body, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
         )
+
+
+def test_verify_blocks_carry_the_day_each_stage_was_recorded(client, migrated_engine):
+    """The consumer journey shows a date per step (12 §10). A day, not a
+    timestamp: the shopper needs "harvested 9 Mar", nothing finer."""
+    a, a_hdr = _farmer(migrated_engine, "+254700040020", "f-a17")
+    batch_id = _batch(client, a, seed_apiary(migrated_engine, a), a_hdr)
+    client.post(f"/v2/batches/{batch_id}/harvest", json=HARVEST, headers=a_hdr)
+
+    body = client.get(public_path(migrated_engine, batch_id, "verify")).json()
+    today = datetime.now(UTC).date().isoformat()
+    assert body["verification"]["harvest"]["recorded_on"] == today
+    assert body["verification"]["metadata"]["recorded_on"] == today
+    assert body["verification"]["process"] is None
