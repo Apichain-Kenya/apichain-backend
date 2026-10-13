@@ -34,3 +34,4 @@ class ApiaryResponse(BaseModel):
     altitude: Decimal | None
     vegetation_type: str | None
     hive_count: int | None
+    locality: str | None

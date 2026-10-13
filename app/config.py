@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # A lost refresh response may be retried with the old token for this long
     # (12 D5). Short on purpose: a stolen token replayed later still trips reuse.
     refresh_reuse_window_seconds: int = 60
+    # Apiary locality lookup (12 D12): `nominatim` or `none`.
+    geocoder_backend: str = "nominatim"
     bcrypt_rounds: int = 12
 
     # Audit-chain integrity check (P1-G). The scheduler is disabled in tests.

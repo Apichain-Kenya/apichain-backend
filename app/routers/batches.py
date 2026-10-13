@@ -7,17 +7,20 @@ Staff-facing and keyed by the internal `id`. The two anonymous consumer views
 
 import uuid
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import requires
+from app.enums import Role
 from app.errors import APIError, error_responses
 from app.models import (
     ApiaryLocation,
     ApiaryRecord,
+    AuditLog,
     BatchMetadata,
     BatchState,
     CodexConformance,
@@ -32,8 +35,14 @@ from app.models import (
 )
 from app.routers._context import request_context
 from app.schemas.batches import (
+    BatchApiaryOut,
     BatchCreateRequest,
+    BatchDetail,
+    BatchMetadataOut,
+    BatchPage,
     BatchResponse,
+    BatchStageOut,
+    BatchSummary,
     StageRecordedResponse,
 )
 from app.schemas.common import IdempotencyKeyHeader
@@ -45,6 +54,7 @@ from app.schemas.stages import (
     ProcessRecordRequest,
 )
 from app.services import (
+    anchor_proof,
     audit_log,
     codex_scoring,
     idempotency,
@@ -65,6 +75,10 @@ _require_process = requires("batch.process_record")
 _require_lab = requires("batch.lab_verify")
 _require_package = requires("batch.package")
 _require_distribute = requires("batch.distribute")
+_require_read = requires("batch.read")
+
+# Roles that see the exact apiary point on a batch (12 D17).
+_SEES_LOCATION = {Role.farmer, Role.field_officer, Role.admin}
 
 
 def _generate_batch_code() -> str:
@@ -416,3 +430,156 @@ def record_distribution(
         ),
         build_payload=stage_payloads.distribution_record,
     )
+
+
+# --- Reads (P4a-B, 12 §6) ------------------------------------------------------
+
+
+@router.get("", response_model=BatchPage, responses=error_responses(401, 403))
+def list_batches(
+    farmer_id: int | None = Query(default=None, ge=1, le=_MAX_INT4),
+    state: BatchState | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, pattern=r"^[1-9][0-9]{0,9}$"),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_read),
+) -> BatchPage:
+    """Newest first. A farmer always sees only their own batches; naming
+    another farmer is refused, not silently narrowed.
+
+    Pages are keyed on `id`, which only grows, so a batch created while the
+    client is paging never shifts or repeats a later page.
+    """
+    if actor.role is Role.farmer:
+        own = ownership.farmer_profile_id(db, actor)
+        if farmer_id is not None:
+            ownership.assert_acts_for_farmer(db, actor, farmer_id)
+        if own is None:
+            raise APIError(403, "forbidden", "A farmer may only act on their own records")
+        farmer_id = own
+
+    query = (
+        select(HoneyBatch, BatchMetadata.honey_type, ApiaryLocation.name)
+        .outerjoin(BatchMetadata, BatchMetadata.batch_id == HoneyBatch.id)
+        .outerjoin(ApiaryRecord, ApiaryRecord.batch_id == HoneyBatch.id)
+        .outerjoin(ApiaryLocation, ApiaryLocation.id == ApiaryRecord.apiary_id)
+        .order_by(HoneyBatch.id.desc())
+        .limit(limit + 1)
+    )
+    if farmer_id is not None:
+        query = query.where(HoneyBatch.farmer_id == farmer_id)
+    if state is not None:
+        query = query.where(HoneyBatch.state == state)
+    if cursor is not None:
+        query = query.where(HoneyBatch.id < int(cursor))
+
+    rows = db.execute(query).all()
+    page = rows[:limit]
+    return BatchPage(
+        items=[
+            BatchSummary(
+                id=b.id,
+                public_id=b.public_id,
+                batch_code=b.batch_code,
+                state=str(b.state),
+                honey_type=honey_type,
+                apiary_name=apiary_name,
+                created_at=b.created_at,
+                state_updated_at=b.state_updated_at,
+            )
+            for b, honey_type, apiary_name in page
+        ],
+        next_cursor=str(page[-1][0].id) if len(rows) > limit else None,
+    )
+
+
+@router.get("/{batch_id}", response_model=BatchDetail, responses=error_responses(401, 403, 404))
+def read_batch(
+    batch_id: int = Path(ge=1, le=_MAX_INT4),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_read),
+) -> BatchDetail:
+    """The authenticated batch view `10` §10 deferred: exact values, every
+    audit row with who acted, and per-entry anchor status."""
+    batch = db.get(HoneyBatch, batch_id)
+    if batch is None:
+        raise APIError(404, "batch_not_found", "Batch does not exist")
+    ownership.assert_acts_for_farmer(db, actor, batch.farmer_id)
+
+    metadata = db.execute(
+        select(BatchMetadata).where(BatchMetadata.batch_id == batch.id)
+    ).scalar_one_or_none()
+    apiary = None
+    pair = db.execute(
+        select(ApiaryRecord, ApiaryLocation)
+        .join(ApiaryLocation, ApiaryLocation.id == ApiaryRecord.apiary_id)
+        .where(ApiaryRecord.batch_id == batch.id)
+    ).one_or_none()
+    if pair is not None:
+        record, location = pair
+        sees = actor.role in _SEES_LOCATION
+        apiary = BatchApiaryOut(
+            apiary_id=location.id,
+            name=location.name,
+            locality=location.locality,
+            latitude=record.latitude if sees else None,
+            longitude=record.longitude if sees else None,
+            hive_count=record.hive_count,
+            location_withheld=not sees,
+        )
+
+    entries = anchor_proof.entries_for_subject(db, subject_type="batch", subject_id=str(batch.id))
+    status_by_id = {e.audit_id: e.status for e in entries}
+    rows = (
+        db.execute(
+            select(AuditLog)
+            .where(AuditLog.subject_type == "batch", AuditLog.subject_id == str(batch.id))
+            .order_by(AuditLog.id)
+        )
+        .scalars()
+        .all()
+    )
+    names = _display_names(db, {r.actor_id for r in rows if r.actor_id is not None})
+    conformance = db.execute(
+        select(CodexConformance.verdict).where(CodexConformance.batch_id == batch.id)
+    ).scalar_one_or_none()
+
+    return BatchDetail(
+        id=batch.id,
+        public_id=batch.public_id,
+        batch_code=batch.batch_code,
+        farmer_id=batch.farmer_id,
+        state=str(batch.state),
+        created_at=batch.created_at,
+        state_updated_at=batch.state_updated_at,
+        metadata=BatchMetadataOut.model_validate(metadata) if metadata is not None else None,
+        apiary=apiary,
+        stages=[
+            BatchStageOut(
+                audit_id=r.id,
+                action=r.action,
+                recorded_at=r.created_at,
+                actor_id=r.actor_id,
+                actor_role=str(r.actor_role),
+                actor_display_name=names.get(r.actor_id) if r.actor_id is not None else None,
+                payload_hash=r.payload_hash.hex(),
+                anchor_status=status_by_id.get(r.id, "pending"),  # type: ignore[arg-type]
+            )
+            for r in rows
+        ],
+        conformance_verdict=str(conformance).lower() if conformance is not None else None,  # type: ignore[arg-type]
+        anchor_status=anchor_proof.rollup(entries),  # type: ignore[arg-type]
+    )
+
+
+def _display_names(db: Session, user_ids: set[int]) -> dict[int, str]:
+    """Farmer users by their name, staff by their username (as `/me`)."""
+    if not user_ids:
+        return {}
+    names: dict[int, str] = {}
+    for user in db.execute(select(User).where(User.id.in_(user_ids))).scalars():
+        names[user.id] = user.username or user.phone or f"user {user.id}"
+    for farmer in db.execute(select(Farmer).where(Farmer.user_id.in_(user_ids))).scalars():
+        assert farmer.user_id is not None
+        names[farmer.user_id] = f"{farmer.first_name} {farmer.last_name}"
+    return names

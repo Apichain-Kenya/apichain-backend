@@ -42,6 +42,7 @@ def _disable_scheduler():
     app.config.settings.scanner_backend = "fake"
     app.config.settings.sms_backend = "fake"
     app.config.settings.email_backend = "fake"
+    app.config.settings.geocoder_backend = "none"
     yield
 
 
@@ -92,12 +93,19 @@ class Boundaries:
     """The four external boundaries as fakes a test can inspect (11 D4)."""
 
     def __init__(self) -> None:
-        from tests.fakes import FakeObjectStore, FakeScanner, RecordingEmail, RecordingSms
+        from tests.fakes import (
+            FakeObjectStore,
+            FakeScanner,
+            RecordingEmail,
+            RecordingGeocoder,
+            RecordingSms,
+        )
 
         self.store = FakeObjectStore()
         self.scanner = FakeScanner()
         self.sms = RecordingSms()
         self.email = RecordingEmail()
+        self.geocoder = RecordingGeocoder()
 
 
 @pytest.fixture
@@ -130,7 +138,13 @@ def client(migrated_engine, boundaries):
     real); all spine tables are truncated after each test for isolation."""
     from app.database import get_db
     from app.main import app
-    from app.routers._boundaries import get_email, get_object_store, get_scanner, get_sms
+    from app.routers._boundaries import (
+        get_email,
+        get_geocoder,
+        get_object_store,
+        get_scanner,
+        get_sms,
+    )
 
     testing_session = sessionmaker(bind=migrated_engine, autoflush=False, autocommit=False)
 
@@ -146,6 +160,7 @@ def client(migrated_engine, boundaries):
     app.dependency_overrides[get_scanner] = lambda: boundaries.scanner
     app.dependency_overrides[get_sms] = lambda: boundaries.sms
     app.dependency_overrides[get_email] = lambda: boundaries.email
+    app.dependency_overrides[get_geocoder] = lambda: boundaries.geocoder
     try:
         yield _PwaLikeClient(app, base_url="https://testserver")
     finally:

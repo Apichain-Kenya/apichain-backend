@@ -74,6 +74,9 @@ class BatchVerifyResponse(BaseModel):
     public_id: str
     # No `batch_code`: clients may supply it as free text, so a name or phone
     # typed there would reach every jar scan (11 D11). `public_id` is the key.
+    # Locality label for the jar's hero (12 D12): derived from coordinates
+    # rounded to 2 dp, never the hive point itself. Null if the lookup failed.
+    place: str | None
     state: str
     # The farmer's declaration in display form (no free text).
     metadata: MetadataPublic | None

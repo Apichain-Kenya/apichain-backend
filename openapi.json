@@ -407,6 +407,17 @@
             "title": "Latitude",
             "type": "string"
           },
+          "locality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
           "longitude": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Longitude",
@@ -436,7 +447,8 @@
           "longitude",
           "altitude",
           "vegetation_type",
-          "hive_count"
+          "hive_count",
+          "locality"
         ],
         "title": "ApiaryResponse",
         "type": "object"
@@ -470,6 +482,80 @@
           "rows_checked"
         ],
         "title": "AuditHealthResponse",
+        "type": "object"
+      },
+      "BatchApiaryOut": {
+        "description": "The apiary a batch was recorded against. The exact point is shown only\nto the owner, field officers and admins (12 D17); for everyone else the\ncoordinates are null and `location_withheld` says why.",
+        "properties": {
+          "apiary_id": {
+            "title": "Apiary Id",
+            "type": "integer"
+          },
+          "hive_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hive Count"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "location_withheld": {
+            "title": "Location Withheld",
+            "type": "boolean"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiary_id",
+          "name",
+          "locality",
+          "latitude",
+          "longitude",
+          "hive_count",
+          "location_withheld"
+        ],
+        "title": "BatchApiaryOut",
         "type": "object"
       },
       "BatchCreateRequest": {
@@ -508,6 +594,109 @@
           "metadata"
         ],
         "title": "BatchCreateRequest",
+        "type": "object"
+      },
+      "BatchDetail": {
+        "properties": {
+          "anchor_status": {
+            "enum": [
+              "pending",
+              "partial",
+              "anchored",
+              "confirmed"
+            ],
+            "title": "Anchor Status",
+            "type": "string"
+          },
+          "apiary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BatchApiaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "conformance_verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "incomplete"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformance Verdict"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "farmer_id": {
+            "title": "Farmer Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BatchMetadataOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/BatchStageOut"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "state_updated_at": {
+            "format": "date-time",
+            "title": "State Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "public_id",
+          "batch_code",
+          "farmer_id",
+          "state",
+          "created_at",
+          "state_updated_at",
+          "metadata",
+          "apiary",
+          "stages",
+          "conformance_verdict",
+          "anchor_status"
+        ],
+        "title": "BatchDetail",
         "type": "object"
       },
       "BatchMetadataInput": {
@@ -566,6 +755,82 @@
         "title": "BatchMetadataInput",
         "type": "object"
       },
+      "BatchMetadataOut": {
+        "properties": {
+          "apiary_management_method": {
+            "title": "Apiary Management Method",
+            "type": "string"
+          },
+          "expected_yield_kg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Expected Yield Kg",
+            "type": "string"
+          },
+          "harvest_window_end": {
+            "format": "date",
+            "title": "Harvest Window End",
+            "type": "string"
+          },
+          "harvest_window_start": {
+            "format": "date",
+            "title": "Harvest Window Start",
+            "type": "string"
+          },
+          "honey_type": {
+            "title": "Honey Type",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "honey_type",
+          "expected_yield_kg",
+          "harvest_window_start",
+          "harvest_window_end",
+          "apiary_management_method",
+          "notes"
+        ],
+        "title": "BatchMetadataOut",
+        "type": "object"
+      },
+      "BatchPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "BatchPage",
+        "type": "object"
+      },
       "BatchResponse": {
         "properties": {
           "batch_code": {
@@ -597,6 +862,153 @@
           "state"
         ],
         "title": "BatchResponse",
+        "type": "object"
+      },
+      "BatchStageOut": {
+        "description": "One audit row for this batch: what happened, when, and who did it. The\nactor is what lets the console show an admin acting in another role's\nplace (03 \u00a713.1).",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Display Name"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "actor_role": {
+            "title": "Actor Role",
+            "type": "string"
+          },
+          "anchor_status": {
+            "enum": [
+              "pending",
+              "anchored",
+              "confirmed"
+            ],
+            "title": "Anchor Status",
+            "type": "string"
+          },
+          "audit_id": {
+            "title": "Audit Id",
+            "type": "integer"
+          },
+          "payload_hash": {
+            "title": "Payload Hash",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "audit_id",
+          "action",
+          "recorded_at",
+          "actor_id",
+          "actor_role",
+          "actor_display_name",
+          "payload_hash",
+          "anchor_status"
+        ],
+        "title": "BatchStageOut",
+        "type": "object"
+      },
+      "BatchState": {
+        "description": "The six-state honey batch lifecycle (04 \u00a75.2). No state skipping.",
+        "enum": [
+          "CREATED",
+          "HARVESTED",
+          "PROCESSED",
+          "LAB_VERIFIED",
+          "PACKAGED",
+          "DISTRIBUTED"
+        ],
+        "title": "BatchState",
+        "type": "string"
+      },
+      "BatchSummary": {
+        "description": "One row of `GET /v2/batches`. No anchor status here: computing it means\nbuilding Merkle paths per batch, and the list is for finding a batch, not\nproving it. The detail view carries it.",
+        "properties": {
+          "apiary_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apiary Name"
+          },
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "honey_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Honey Type"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "state_updated_at": {
+            "format": "date-time",
+            "title": "State Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "public_id",
+          "batch_code",
+          "state",
+          "honey_type",
+          "apiary_name",
+          "created_at",
+          "state_updated_at"
+        ],
+        "title": "BatchSummary",
         "type": "object"
       },
       "BatchVerifyResponse": {
@@ -635,6 +1047,17 @@
               }
             ]
           },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
           "public_id": {
             "title": "Public Id",
             "type": "string"
@@ -650,6 +1073,7 @@
         "required": [
           "batch_id",
           "public_id",
+          "place",
           "state",
           "metadata",
           "verification",
@@ -2161,6 +2585,96 @@
       }
     },
     "/v2/apiaries": {
+      "get": {
+        "description": "A farmer's apiaries, with exact coordinates (12 \u00a76, D17).\n\nOnly the owning farmer, field officers and admins reach this\n(`apiary.read`), because the exact hive point is sensitive personal data\n(03 \u00a78.1). A farmer defaults to themselves; staff must name the farmer.",
+        "operationId": "list_apiaries_v2_apiaries_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "farmer_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Farmer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiaryResponse"
+                  },
+                  "title": "Response List Apiaries V2 Apiaries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 List Apiaries V2 Apiaries Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Apiaries",
+        "tags": [
+          "apiaries"
+        ]
+      },
       "post": {
         "operationId": "create_apiary_v2_apiaries_post",
         "parameters": [
@@ -2516,6 +3030,129 @@
       }
     },
     "/v2/batches": {
+      "get": {
+        "description": "Newest first. A farmer always sees only their own batches; naming\nanother farmer is refused, not silently narrowed.\n\nPages are keyed on `id`, which only grows, so a batch created while the\nclient is paging never shifts or repeats a later page.",
+        "operationId": "list_batches_v2_batches_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "farmer_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Farmer Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BatchState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[1-9][0-9]{0,9}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Batches",
+        "tags": [
+          "batches"
+        ]
+      },
       "post": {
         "operationId": "create_batch_v2_batches_post",
         "parameters": [
@@ -2612,6 +3249,89 @@
           }
         ],
         "summary": "Create Batch",
+        "tags": [
+          "batches"
+        ]
+      }
+    },
+    "/v2/batches/{batch_id}": {
+      "get": {
+        "description": "The authenticated batch view `10` \u00a710 deferred: exact values, every\naudit row with who acted, and per-entry anchor status.",
+        "operationId": "read_batch_v2_batches__batch_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Batch",
         "tags": [
           "batches"
         ]

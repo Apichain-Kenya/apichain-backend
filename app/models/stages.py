@@ -88,6 +88,8 @@ class ApiaryLocation(Base):
     altitude: Mapped[Decimal | None] = mapped_column(_MEASURE)
     vegetation_type: Mapped[str | None] = mapped_column(String)
     hive_count: Mapped[int | None] = mapped_column(Integer)
+    # Display label from a 2 dp lookup (12 D12); never hashed, never exact.
+    locality: Mapped[str | None] = mapped_column(String(120), info={"pii": "none"})
     created_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, server_default=func.now())
 
 
