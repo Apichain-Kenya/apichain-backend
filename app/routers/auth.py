@@ -122,6 +122,12 @@ def refresh(
 
     user = db.get(User, rotation.row.user_id)
     assert user is not None
+    if not user.is_active:
+        # As login refuses an inactive account, so does refresh: a
+        # deactivated user's cookie must not keep renewing itself.
+        refresh_tokens.revoke_all(db, user.id)
+        db.commit()
+        raise APIError(401, "invalid_token", "Invalid or expired refresh token")
     if rotation.grace:
         # The one path where a spent token worked: on the record (12 D5).
         ip, user_agent = request_context(request)

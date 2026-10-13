@@ -62,7 +62,14 @@ class Rotation(NamedTuple):
 
 
 def rotate(db: Session, raw: str) -> Rotation:
-    row = _find(db, raw)
+    # Locked: two refreshes of one token at once (a 2G retry overlapping the
+    # original) must not both read it as unrotated and both mint a successor.
+    # The second waits, then sees the rotation and takes the grace path.
+    row = db.execute(
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == security.hash_token(raw))
+        .with_for_update()
+    ).scalar_one_or_none()
     if row is None:
         raise InvalidRefreshToken("unknown refresh token")
 
@@ -81,6 +88,10 @@ def rotate(db: Session, raw: str) -> Rotation:
         successor = db.get(RefreshToken, row.rotated_to)
         assert successor is not None  # FK guarantees it
         successor.revoked_at = _now()
+        # One grace use per spent token. Without this, each grace rotation's
+        # fresh successor restarted the window, and a stolen token replayed
+        # every <60 s minted sessions indefinitely (pre-merge review).
+        row.revoked_at = _now()
         grace = True
 
     if row.expires_at <= _now():
@@ -130,3 +141,8 @@ def _revoke_all_for_user(db: Session, user_id: int) -> None:
         .values(revoked_at=_now())
     )
     db.flush()
+
+
+def revoke_all(db: Session, user_id: int) -> None:
+    """Revoke every live refresh token of a user (deactivation, theft)."""
+    _revoke_all_for_user(db, user_id)

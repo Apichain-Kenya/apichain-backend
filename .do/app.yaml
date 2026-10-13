@@ -23,9 +23,12 @@ region: fra # Frankfurt — closest DO region to Kenya
 
 ingress:
   rules:
-    - component: { name: api }
+    # preserve_path_prefix: App Platform trims the matched prefix by default,
+    # and every API route is mounted under /v2. Without this, /v2/auth/login
+    # would reach the API as /auth/login and 404 (pre-merge review).
+    - component: { name: api, preserve_path_prefix: true }
       match: { path: { prefix: /v2 } }
-    - component: { name: api }
+    - component: { name: api, preserve_path_prefix: true }
       match: { path: { prefix: /health } }
     - component: { name: web }
       match: { path: { prefix: / } }
