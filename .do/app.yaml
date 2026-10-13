@@ -9,8 +9,38 @@
 #
 # Activation (add funds + DO account): see DEPLOYMENT.md in this repo.
 
-name: apichain-backend-staging
+# ONE APP, ONE ORIGIN (12 D4, Phase 4a). The PWA and the API are served from a
+# single App Platform app: the static site at `/`, the API service at `/v2` and
+# `/health`. This is a requirement, not a convenience: the refresh token is a
+# SameSite=Strict cookie scoped to /v2/auth, and `ondigitalocean.app` is on the
+# Public Suffix List, so two separate apps would be different *sites* and the
+# browser would never send the cookie. Do not split this back into two apps.
+# The client repo's old standalone static-site spec is retired in favour of
+# this one.
+
+name: apichain-staging
 region: fra # Frankfurt — closest DO region to Kenya
+
+ingress:
+  rules:
+    - component: { name: api }
+      match: { path: { prefix: /v2 } }
+    - component: { name: api }
+      match: { path: { prefix: /health } }
+    - component: { name: web }
+      match: { path: { prefix: / } }
+
+static_sites:
+  - name: web
+    github:
+      repo: Apichain-Kenya/apichain-client
+      branch: main
+      deploy_on_push: false
+    source_dir: /
+    build_command: npm ci && npm run build
+    output_dir: dist
+    # Every app URL serves the shell; the PWA router takes it from there.
+    catchall_document: index.html
 
 services:
   - name: api
