@@ -26,6 +26,16 @@ class LoginRequest(BaseModel):
     _pw = field_validator("password")(_within_bcrypt_limit)
 
 
+class PasswordChangeRequest(BaseModel):
+    """Change your own password (13 §5 item 9). Length is checked by the
+    shared policy for the caller's role, so the error is one envelope."""
+
+    current_password: SafeStr = Field(min_length=1)
+    new_password: SafeStr = Field(min_length=1)
+
+    _pw = field_validator("current_password")(_within_bcrypt_limit)
+
+
 class AccessTokenResponse(BaseModel):
     """Login and refresh return only the short-lived access token. The refresh
     token travels in an HttpOnly cookie and never in a body (12 D3)."""
@@ -43,6 +53,9 @@ class MeResponse(BaseModel):
     role: Role
     display_name: str
     farmer_id: int | None
+    # True until the owner replaces a password someone else chose (13 D5).
+    # While it is, every other route answers 403 password_change_required.
+    must_change_password: bool
 
 
 class StatusResponse(BaseModel):

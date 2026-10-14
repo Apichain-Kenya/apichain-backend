@@ -58,10 +58,23 @@ def _fingerprint(body: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_bytes(body)).hexdigest()
 
 
-def begin(db: Session, *, key: str | None, actor_id: int, body: dict[str, Any]) -> IdemHandle:
+def begin(
+    db: Session,
+    *,
+    key: str | None,
+    actor_id: int,
+    body: dict[str, Any],
+    exclude: frozenset[str] = frozenset(),
+) -> IdemHandle:
+    """`exclude` names body keys left out of the fingerprint. Every password
+    field goes there (13 D4): the fingerprint is a fast, unsalted SHA-256
+    kept forever, so fingerprinting a password beside fields anyone holding
+    the row already knows would hand out an offline brute-force target and
+    sidestep bcrypt. Same key, same action: a replay that differs only in the
+    password gets the stored response, which is the right answer to it."""
     if key is None:
         return IdemHandle(None, actor_id, None, None)
-    fingerprint = _fingerprint(body)
+    fingerprint = _fingerprint({k: v for k, v in body.items() if k not in exclude})
 
     # RETURNING, not rowcount: with ON CONFLICT DO NOTHING a conflicting insert
     # returns no rows, which is unambiguous, whereas rowcount depends on how the

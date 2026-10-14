@@ -1,6 +1,8 @@
 """Auth + RBAC dependencies (P1-D, 04 §5.3).
 
-`get_current_user` decodes the bearer access token and loads an active user.
+`get_current_user` decodes the bearer access token and loads an active user
+who has chosen their own password. `get_current_user_pending_ok` also admits
+one who has not yet (13 D5); only `/v2/me` and `/v2/auth/password` use it.
 `require_roles(*roles)` gates by role. `requires(action)` gates by a single
 `ACTION_ROLES` table — the whole authorization surface in one auditable place,
 so a reviewer reads permissions here instead of chasing decorators across
@@ -59,13 +61,18 @@ ACTION_ROLES: dict[str, set[Role]] = {
     # Admit a farmer here and that check becomes mandatory.
     "batch.package": {Role.operator, Role.admin},
     "batch.distribute": {Role.operator, Role.admin},
+    # Staff accounts (P4b-A): create, list, deactivate, reset. Admin only;
+    # only the root admin may create another admin (checked in the route).
+    "user.manage": {Role.admin},
 }
 
 
-def get_current_user(
+def get_current_user_pending_ok(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
 ) -> User:
+    """The bearer, even if they must still change a password someone else
+    chose. Only for the routes that let them do exactly that."""
     if credentials is None:
         raise APIError(401, "unauthorized", "Authentication required")
     try:
@@ -77,6 +84,17 @@ def get_current_user(
     user = db.get(User, int(claims["sub"]))
     if user is None or not user.is_active:
         raise APIError(401, "unauthorized", "User not found or inactive")
+    return user
+
+
+def get_current_user(user: User = Depends(get_current_user_pending_ok)) -> User:
+    """The bearer, refused while someone else still knows their password
+    (03 §13.1, 13 D5): anything they did would be recorded under their name
+    by whoever chose it. The server enforces it, so no client can skip it."""
+    if user.must_change_password:
+        raise APIError(
+            403, "password_change_required", "Choose your own password before continuing"
+        )
     return user
 
 

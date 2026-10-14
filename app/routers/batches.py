@@ -58,6 +58,7 @@ from app.services import (
     audit_log,
     codex_scoring,
     idempotency,
+    identity,
     ownership,
     stage_payloads,
     stage_writer,
@@ -573,13 +574,6 @@ def read_batch(
 
 
 def _display_names(db: Session, user_ids: set[int]) -> dict[int, str]:
-    """Farmer users by their name, staff by their username (as `/me`)."""
-    if not user_ids:
-        return {}
-    names: dict[int, str] = {}
-    for user in db.execute(select(User).where(User.id.in_(user_ids))).scalars():
-        names[user.id] = user.username or user.phone or f"user {user.id}"
-    for farmer in db.execute(select(Farmer).where(Farmer.user_id.in_(user_ids))).scalars():
-        assert farmer.user_id is not None
-        names[farmer.user_id] = f"{farmer.first_name} {farmer.last_name}"
-    return names
+    """The shared naming rule (13 D6): farmers by their profile, staff by
+    `full_name`, then the username."""
+    return identity.display_names(db, user_ids)

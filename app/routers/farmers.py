@@ -20,7 +20,7 @@ from app.schemas.consent import (
     ConsentStateResponse,
 )
 from app.schemas.farmers import FarmerEnrollRequest, FarmerResponse
-from app.services import audit_log, consent, idempotency, ownership, security
+from app.services import audit_log, consent, idempotency, ownership, password_policy, security
 
 router = APIRouter(prefix="/farmers", tags=["farmers"])
 _require_enroll = requires("farmer.enroll")
@@ -33,7 +33,7 @@ _FARMER_ID = Path(ge=1, le=2_147_483_647)
     "",
     response_model=FarmerResponse,
     status_code=201,
-    responses=error_responses(401, 403, 409),
+    responses=error_responses(401, 403, 409, 422),
 )
 def enroll_farmer(
     body: FarmerEnrollRequest,
@@ -42,11 +42,18 @@ def enroll_farmer(
     db: Session = Depends(get_db),
     actor: User = Depends(_require_enroll),
 ) -> FarmerResponse | JSONResponse:
+    # The password never reaches the fingerprint (13 D4): it is a fast,
+    # unsalted hash kept forever beside fields anyone holding it knows.
     idem = idempotency.begin(
-        db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
+        db,
+        key=idempotency_key,
+        actor_id=actor.id,
+        body=body.model_dump(mode="json"),
+        exclude=frozenset({"password"}),
     )
     if idem.replay is not None:
         return JSONResponse(status_code=idem.replay.status_code, content=idem.replay.body)
+    password_policy.check(Role.farmer, body.password)
 
     clash = db.execute(
         select(User.id).where(or_(User.phone == body.phone, User.username == body.phone))
@@ -63,6 +70,9 @@ def enroll_farmer(
         role=Role.farmer,
         is_root=False,
         is_active=True,
+        # The officer chose it, so the farmer must choose their own at their
+        # first sign-in (13 D5).
+        must_change_password=True,
     )
     db.add(user)
     db.flush()

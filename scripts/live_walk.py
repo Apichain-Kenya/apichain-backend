@@ -117,6 +117,27 @@ fcookie, _ = cookie_of(sc)
 s2, _, b2, _ = call("GET", "/v2/me", token=ftoken)
 check("farmer /me returns farmer_id", s2 == 200 and js(b2).get("farmer_id") == farmer_id, js(b2))
 
+# 3b. The officer chose that password, so the farmer must choose their own
+#     before anything else works (13 D5).
+check(
+    "/me says the farmer must choose their own password",
+    js(b2).get("must_change_password") is True,
+    js(b2),
+)
+s, *_ = call("GET", "/v2/batches", token=ftoken)
+check("until then other routes are 403 password_change_required", s == 403, s)
+s, h, b, sc = call(
+    "POST",
+    "/v2/auth/password",
+    {"current_password": "farm-pw-1234", "new_password": "farm-own-5678"},
+    token=ftoken,
+    cookie=fcookie,
+    headers=CLIENT,
+)
+fcookie, _ = cookie_of(sc)
+ftoken = js(b).get("access_token")
+check("the farmer chooses their own password and stays signed in", s == 200 and fcookie, s)
+
 # 4. Refresh: needs the header; rotates; a lost reply inside 60 s is forgiven.
 s, *_ = call("POST", "/v2/auth/refresh", cookie=fcookie)
 check("refresh without X-ApiChain-Client is 403", s == 403, s)
