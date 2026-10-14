@@ -2,16 +2,17 @@
 acceptance test: creates the farmer's credential + profile, captures consent,
 and appends the `farmer.enrolled` audit row — all in one transaction."""
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import requires
 from app.errors import APIError, error_responses
-from app.models import ConsentPurpose, Farmer, GrantedVia, Role, User
+from app.models import ApiaryLocation, ConsentPurpose, Document, Farmer, GrantedVia, Role, User
 from app.routers._context import request_context
+from app.routers._search import ESCAPE, like_escape
 from app.schemas.common import IdempotencyKeyHeader
 from app.schemas.consent import (
     ConsentRecordRequest,
@@ -19,12 +20,27 @@ from app.schemas.consent import (
     ConsentStateOut,
     ConsentStateResponse,
 )
-from app.schemas.farmers import FarmerEnrollRequest, FarmerResponse
-from app.services import audit_log, consent, idempotency, ownership, password_policy, security
+from app.schemas.farmers import (
+    FarmerDetail,
+    FarmerEnrollRequest,
+    FarmerPage,
+    FarmerResponse,
+    FarmerSummary,
+)
+from app.services import (
+    audit_log,
+    consent,
+    idempotency,
+    identity,
+    ownership,
+    password_policy,
+    security,
+)
 
 router = APIRouter(prefix="/farmers", tags=["farmers"])
 _require_enroll = requires("farmer.enroll")
 _require_consent_action = requires("farmer.consent")
+_require_read = requires("farmer.read")
 
 _FARMER_ID = Path(ge=1, le=2_147_483_647)
 
@@ -267,3 +283,95 @@ def farmer_consents(
             )
         )
     return ConsentStateResponse(farmer_id=farmer.id, consents=states)
+
+
+# --- Reads (P4b-B, 13 §6, D7) ---------------------------------------------------
+
+
+def _summaries(db: Session, farmers: list[Farmer]) -> list[FarmerSummary]:
+    officers = identity.display_names(db, {f.enrolled_by for f in farmers if f.enrolled_by})
+    return [
+        FarmerSummary(
+            id=f.id,
+            display_name=identity.farmer_name(f),
+            phone=f.phone,
+            number_of_hives=f.number_of_hives,
+            phone_verified=f.phone_verified_at is not None,
+            email_verified=f.email_verified_at is not None,
+            enrolled_at=f.created_at,
+            enrolled_by_display_name=officers.get(f.enrolled_by) if f.enrolled_by else None,
+        )
+        for f in farmers
+    ]
+
+
+@router.get("", response_model=FarmerPage, responses=error_responses(401, 403))
+def list_farmers(
+    q: str | None = Query(default=None, min_length=1, max_length=40),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, pattern=r"^[1-9][0-9]{0,9}$"),
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_read),
+) -> FarmerPage:
+    """Every farmer, newest first, for field officers and admins (D7): an
+    officer covering a colleague's area must find that colleague's farmers.
+    `q` matches the start of a first name, a last name or the full name, or
+    the end of a phone number, ignoring case."""
+    if actor.role is Role.farmer:
+        raise APIError(403, "forbidden", "Farmers cannot list farmers")
+
+    query = select(Farmer).order_by(Farmer.id.desc()).limit(limit + 1)
+    if q is not None:
+        term = like_escape(q.strip())
+        full_name = Farmer.first_name + " " + Farmer.last_name
+        query = query.where(
+            or_(
+                Farmer.first_name.ilike(f"{term}%", escape=ESCAPE),
+                Farmer.last_name.ilike(f"{term}%", escape=ESCAPE),
+                full_name.ilike(f"{term}%", escape=ESCAPE),
+                Farmer.phone.like(f"%{term}", escape=ESCAPE),
+            )
+        )
+    if cursor is not None:
+        query = query.where(Farmer.id < int(cursor))
+    rows = list(db.execute(query).scalars())
+    page = rows[:limit]
+    return FarmerPage(
+        items=_summaries(db, page),
+        next_cursor=str(page[-1].id) if len(rows) > limit else None,
+    )
+
+
+@router.get("/{farmer_id}", response_model=FarmerDetail, responses=error_responses(401, 403, 404))
+def read_farmer(
+    farmer_id: int = _FARMER_ID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(_require_read),
+) -> FarmerDetail:
+    """A farmer's profile. A farmer reads only their own (ownership check);
+    operators and lab officers never reach it (D7)."""
+    farmer = _farmer_or_404(db, farmer_id)
+    ownership.assert_acts_for_farmer(db, actor, farmer.id)
+
+    documents = db.execute(
+        select(func.count(Document.id)).where(
+            Document.subject_type == "farmer", Document.subject_id == farmer.id
+        )
+    ).scalar_one()
+    apiaries = db.execute(
+        select(func.count(ApiaryLocation.id)).where(ApiaryLocation.farmer_id == farmer.id)
+    ).scalar_one()
+    [summary] = _summaries(db, [farmer])
+    return FarmerDetail(
+        **summary.model_dump(),
+        first_name=farmer.first_name,
+        last_name=farmer.last_name,
+        email=farmer.email,
+        address=farmer.address,
+        user_id=farmer.user_id,
+        has_email=farmer.email is not None,
+        phone_verified_at=farmer.phone_verified_at,
+        email_verified_at=farmer.email_verified_at,
+        documents_count=documents,
+        apiaries_count=apiaries,
+    )

@@ -14,9 +14,13 @@ from sqlalchemy.orm import Session
 from app.models import Farmer, User
 
 
+def farmer_name(farmer: Farmer) -> str:
+    return f"{farmer.first_name} {farmer.last_name}"
+
+
 def display_name(user: User, farmer: Farmer | None = None) -> str:
     if farmer is not None:
-        return f"{farmer.first_name} {farmer.last_name}"
+        return farmer_name(farmer)
     return user.full_name or user.username or user.phone or f"user {user.id}"
 
 

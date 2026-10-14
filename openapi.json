@@ -643,6 +643,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "farmer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Farmer Display Name"
+          },
           "farmer_id": {
             "title": "Farmer Id",
             "type": "integer"
@@ -655,6 +666,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BatchMetadataOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextAction"
               },
               {
                 "type": "null"
@@ -687,6 +708,7 @@
           "public_id",
           "batch_code",
           "farmer_id",
+          "farmer_display_name",
           "state",
           "created_at",
           "state_updated_at",
@@ -694,7 +716,8 @@
           "apiary",
           "stages",
           "conformance_verdict",
-          "anchor_status"
+          "anchor_status",
+          "next_action"
         ],
         "title": "BatchDetail",
         "type": "object"
@@ -969,6 +992,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "farmer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Farmer Display Name"
+          },
           "honey_type": {
             "anyOf": [
               {
@@ -1005,6 +1039,7 @@
           "state",
           "honey_type",
           "apiary_name",
+          "farmer_display_name",
           "created_at",
           "state_updated_at"
         ],
@@ -1523,6 +1558,157 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "FarmerDetail": {
+        "description": "`GET /v2/farmers/{id}`: the profile with its verification state. A\nfarmer may read only their own. Consents stay on their own endpoint.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "apiaries_count": {
+            "title": "Apiaries Count",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "documents_count": {
+            "title": "Documents Count",
+            "type": "integer"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Verified At"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "title": "Enrolled At",
+            "type": "string"
+          },
+          "enrolled_by_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolled By Display Name"
+          },
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "has_email": {
+            "title": "Has Email",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_name": {
+            "title": "Last Name",
+            "type": "string"
+          },
+          "number_of_hives": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number Of Hives"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "phone_verified": {
+            "title": "Phone Verified",
+            "type": "boolean"
+          },
+          "phone_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Verified At"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "phone",
+          "number_of_hives",
+          "phone_verified",
+          "email_verified",
+          "enrolled_at",
+          "enrolled_by_display_name",
+          "first_name",
+          "last_name",
+          "email",
+          "address",
+          "user_id",
+          "has_email",
+          "phone_verified_at",
+          "email_verified_at",
+          "documents_count",
+          "apiaries_count"
+        ],
+        "title": "FarmerDetail",
+        "type": "object"
+      },
       "FarmerEnrollRequest": {
         "properties": {
           "address": {
@@ -1604,6 +1790,34 @@
         "title": "FarmerEnrollRequest",
         "type": "object"
       },
+      "FarmerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FarmerSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "FarmerPage",
+        "type": "object"
+      },
       "FarmerResponse": {
         "properties": {
           "first_name": {
@@ -1642,6 +1856,70 @@
           "user_id"
         ],
         "title": "FarmerResponse",
+        "type": "object"
+      },
+      "FarmerSummary": {
+        "description": "One row of `GET /v2/farmers`: field officers and admins only (D7), so\nthe phone is in it. No `data_access` audit row yet (Phase 5, 12 D17).",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "title": "Enrolled At",
+            "type": "string"
+          },
+          "enrolled_by_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolled By Display Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "number_of_hives": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number Of Hives"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "phone_verified": {
+            "title": "Phone Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "phone",
+          "number_of_hives",
+          "phone_verified",
+          "email_verified",
+          "enrolled_at",
+          "enrolled_by_display_name"
+        ],
+        "title": "FarmerSummary",
         "type": "object"
       },
       "GrantedVia": {
@@ -2045,6 +2323,30 @@
           "apiary_management_method"
         ],
         "title": "MetadataPublic",
+        "type": "object"
+      },
+      "NextAction": {
+        "description": "The one step this batch can take next, and whether the caller may take\nit (13 D10). Computed on the server from the lifecycle and the RBAC table,\nso the client keeps no copy of either. `allowed` is advice for the screen;\nthe write route still checks.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "target_state": {
+            "title": "Target State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "target_state",
+          "allowed"
+        ],
+        "title": "NextAction",
         "type": "object"
       },
       "PackagingRecordRequest": {
@@ -3313,7 +3615,7 @@
     },
     "/v2/batches": {
       "get": {
-        "description": "Newest first. A farmer always sees only their own batches; naming\nanother farmer is refused, not silently narrowed.\n\nPages are keyed on `id`, which only grows, so a batch created while the\nclient is paging never shifts or repeats a later page.",
+        "description": "Newest first. A farmer always sees only their own batches; naming\nanother farmer is refused, not silently narrowed.\n\nPages are keyed on `id`, which only grows, so a batch created while the\nclient is paging never shifts or repeats a later page.\n\n`state` repeats (`?state=HARVESTED&state=LAB_VERIFIED`), which is how a\nconsole work queue spanning several steps is one request (13 \u00a76). `q`\nfinds a batch by the start of its code (as printed on a tub) or by its\nexact public id (as in a jar's QR).",
         "operationId": "list_batches_v2_batches_get",
         "parameters": [
           {
@@ -3341,13 +3643,34 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/BatchState"
+                  "items": {
+                    "$ref": "#/components/schemas/BatchState"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
               "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {
@@ -4300,6 +4623,113 @@
       }
     },
     "/v2/farmers": {
+      "get": {
+        "description": "Every farmer, newest first, for field officers and admins (D7): an\nofficer covering a colleague's area must find that colleague's farmers.\n`q` matches the start of a first name, a last name or the full name, or\nthe end of a phone number, ignoring case.",
+        "operationId": "list_farmers_v2_farmers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[1-9][0-9]{0,9}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FarmerPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Farmers",
+        "tags": [
+          "farmers"
+        ]
+      },
       "post": {
         "operationId": "enroll_farmer_v2_farmers_post",
         "parameters": [
@@ -4394,6 +4824,89 @@
           }
         ],
         "summary": "Enroll Farmer",
+        "tags": [
+          "farmers"
+        ]
+      }
+    },
+    "/v2/farmers/{farmer_id}": {
+      "get": {
+        "description": "A farmer's profile. A farmer reads only their own (ownership check);\noperators and lab officers never reach it (D7).",
+        "operationId": "read_farmer_v2_farmers__farmer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FarmerDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Farmer",
         "tags": [
           "farmers"
         ]

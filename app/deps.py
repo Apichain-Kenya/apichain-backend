@@ -64,6 +64,12 @@ ACTION_ROLES: dict[str, set[Role]] = {
     # Staff accounts (P4b-A): create, list, deactivate, reset. Admin only;
     # only the root admin may create another admin (checked in the route).
     "user.manage": {Role.admin},
+    # Farmer list and profile (P4b-B, 13 D7): field officers and admins see
+    # every farmer, contact details included. Admits a farmer for their own
+    # profile only, so the profile route checks ownership and the list route
+    # refuses a farmer outright. Operators and lab officers see a farmer's
+    # name on a batch and nothing else.
+    "farmer.read": {Role.farmer, Role.field_officer, Role.admin},
 }
 
 
