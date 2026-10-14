@@ -5548,7 +5548,7 @@
     },
     "/v2/users/{user_id}/reset-password": {
       "post": {
-        "description": "Set a new starting password for anyone, a farmer included (a farmer who\nforgot theirs asks an admin). The owner must change it at their next\nsign-in, and every session they hold ends now.",
+        "description": "Set a new starting password for someone else, a farmer included (a\nfarmer who forgot theirs asks an admin). The owner must change it at their\nnext sign-in, and every session they hold ends now.\n\nA reset needs no current password, so three targets are refused. Without\nthese refusals a reset would let one admin take over another account: they\ncould reset it, sign in before the owner does, and complete the forced\nchange themselves.\n- Your own account: a stolen access token must not let anyone skip the\n  current password that `/v2/auth/password` asks for.\n- The root admin: recovered only from the server (`scripts/reset_root.py`).\n- Another admin, unless you are the root admin: otherwise any admin could\n  take over a fellow admin's account.",
         "operationId": "reset_password_v2_users__user_id__reset_password_post",
         "parameters": [
           {
@@ -5627,6 +5627,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {

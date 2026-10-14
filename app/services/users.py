@@ -24,6 +24,28 @@ def valid_username(value: str) -> bool:
     return re.fullmatch(USERNAME_PATTERN, value) is not None
 
 
+def identifier_taken(db: Session, username: str) -> bool:
+    """Login matches a username *or* a phone, so a new username must be free
+    as either. Enrolment does not normalise phones, so a format rule alone
+    cannot promise that no farmer signs in with something that looks like a
+    username."""
+    found = db.execute(
+        select(User.id).where((User.username == username) | (User.phone == username))
+    ).first()
+    return found is not None
+
+
+def lock_active_admins(db: Session) -> None:
+    """Lock every active admin row in id order. Taken before any single user
+    row, it makes concurrent admin changes queue instead of deadlocking."""
+    db.execute(
+        select(User.id)
+        .where(User.role == Role.admin, User.is_active.is_(True))
+        .order_by(User.id)
+        .with_for_update()
+    ).all()
+
+
 class Refused(Exception):
     """A rule refused the change. `code` is the stable API error code."""
 

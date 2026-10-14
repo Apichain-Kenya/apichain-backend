@@ -633,3 +633,79 @@ def test_new_account_writes_require_the_idempotency_key():
         params = spec["paths"][path]["post"].get("parameters", [])
         key = [p for p in params if p["in"] == "header" and p["name"] == "Idempotency-Key"]
         assert key and key[0]["required"] is True, path
+
+
+# --- Follow-up: privileged targets (pre-push review) -----------------------------
+
+
+def test_an_admin_cannot_reset_their_own_password_here(client, migrated_engine):
+    """A stolen access token must not let anyone skip the current password."""
+    admin = _staff(migrated_engine, Role.admin, "selfreset")
+    res = client.post(
+        f"/v2/users/{admin}/reset-password",
+        json={"password": NEW_STAFF_PW},
+        headers=auth(admin, Role.admin),
+    )
+    assert (res.status_code, res.json()["code"]) == (409, "reset_own_password")
+
+
+def test_nobody_resets_the_root_admin_over_http(client, migrated_engine):
+    admin = _staff(migrated_engine, Role.admin, "rootresetter")
+    root = _staff(migrated_engine, Role.admin, "therootadmin", is_root=True)
+    res = client.post(
+        f"/v2/users/{root}/reset-password",
+        json={"password": NEW_STAFF_PW},
+        headers=auth(admin, Role.admin),
+    )
+    assert (res.status_code, res.json()["code"]) == (409, "root_protected")
+    assert _login(client, "therootadmin", STAFF_PW).status_code == 200
+
+
+def test_only_the_root_admin_resets_another_admin(client, migrated_engine):
+    admin = _staff(migrated_engine, Role.admin, "plainresetter")
+    other = _staff(migrated_engine, Role.admin, "otheradmin2")
+    root = _staff(migrated_engine, Role.admin, "rootresetter2", is_root=True)
+    body = {"password": NEW_STAFF_PW}
+    refused = client.post(
+        f"/v2/users/{other}/reset-password", json=body, headers=auth(admin, Role.admin)
+    )
+    assert (refused.status_code, refused.json()["code"]) == (403, "root_required")
+    ok = client.post(f"/v2/users/{other}/reset-password", json=body, headers=auth(root, Role.admin))
+    assert ok.status_code == 200, ok.text
+
+
+def test_a_username_cannot_take_a_phone_login(client, migrated_engine):
+    """Enrolment does not normalise phones, so a farmer could have signed in
+    as "jmwende"; login then matched two rows."""
+    admin = _staff(migrated_engine, Role.admin, "collideadmin")
+    farmer_id = seed_farmer(migrated_engine, "+254700004010")
+    with Session(migrated_engine) as s:
+        s.add(
+            User(
+                phone="jmwende",
+                password_hash=security.hash_password(FARMER_PW),
+                role=Role.farmer,
+                is_root=False,
+                is_active=True,
+            )
+        )
+        s.commit()
+    res = client.post("/v2/users", json=_new_user(), headers=auth(admin, Role.admin))
+    assert (res.status_code, res.json()["code"]) == (409, "username_taken")
+    assert farmer_id
+
+
+def test_root_recovery_script_service(client, migrated_engine):
+    root = _staff(migrated_engine, Role.admin, "lostroot", is_root=True)
+    raw = _cookie(_login(client, "lostroot", STAFF_PW))
+    with Session(migrated_engine) as s:
+        bootstrap.reset_root_password(s, password=NEW_STAFF_PW)
+        s.commit()
+    assert _login(client, "lostroot", STAFF_PW).status_code == 401
+    assert _login(client, "lostroot", NEW_STAFF_PW).status_code == 200
+    client.cookies.clear()
+    assert client.post("/v2/auth/refresh", headers=CLIENT, cookies={COOKIE: raw}).status_code == 401
+    [payload] = _payloads(migrated_engine, "user.password_reset")
+    assert payload == {"user_id": root, "reset_by": None}
+    with Session(migrated_engine) as s, pytest.raises(bootstrap.BootstrapRefused):
+        bootstrap.reset_root_password(s, password="short")

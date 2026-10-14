@@ -64,7 +64,7 @@ def create_user(
     if role is Role.admin and not actor.is_root:
         raise APIError(403, "root_required", "Only the first admin can add another admin")
     password_policy.check(role, body.password)
-    if db.execute(select(User.id).where(User.username == body.username)).first() is not None:
+    if users.identifier_taken(db, body.username):
         raise APIError(409, "username_taken", "That username is taken")
 
     user = User(
@@ -146,6 +146,9 @@ def deactivate_user(
     if idem.replay is not None:
         return JSONResponse(status_code=idem.replay.status_code, content=idem.replay.body)
 
+    # Every active admin is locked in id order before the target, so two
+    # admins deactivating each other queue up instead of deadlocking.
+    users.lock_active_admins(db)
     target = _user_or_404(db, user_id)
     try:
         changed = users.deactivate(db, actor=actor, target=target)
@@ -174,7 +177,7 @@ def deactivate_user(
 @router.post(
     "/{user_id}/reset-password",
     response_model=UserOut,
-    responses=error_responses(401, 403, 404, 422),
+    responses=error_responses(401, 403, 404, 409, 422),
 )
 def reset_password(
     body: PasswordResetRequest,
@@ -184,9 +187,20 @@ def reset_password(
     db: Session = Depends(get_db),
     actor: User = Depends(_require_manage),
 ) -> UserOut | JSONResponse:
-    """Set a new starting password for anyone, a farmer included (a farmer who
-    forgot theirs asks an admin). The owner must change it at their next
-    sign-in, and every session they hold ends now."""
+    """Set a new starting password for someone else, a farmer included (a
+    farmer who forgot theirs asks an admin). The owner must change it at their
+    next sign-in, and every session they hold ends now.
+
+    A reset needs no current password, so three targets are refused. Without
+    these refusals a reset would let one admin take over another account: they
+    could reset it, sign in before the owner does, and complete the forced
+    change themselves.
+    - Your own account: a stolen access token must not let anyone skip the
+      current password that `/v2/auth/password` asks for.
+    - The root admin: recovered only from the server (`scripts/reset_root.py`).
+    - Another admin, unless you are the root admin: otherwise any admin could
+      take over a fellow admin's account.
+    """
     idem = idempotency.begin(
         db,
         key=idempotency_key,
@@ -198,6 +212,12 @@ def reset_password(
         return JSONResponse(status_code=idem.replay.status_code, content=idem.replay.body)
 
     target = _user_or_404(db, user_id)
+    if target.id == actor.id:
+        raise APIError(409, "reset_own_password", "Change your own password with your current one")
+    if target.is_root:
+        raise APIError(409, "root_protected", "The first admin's password can't be reset here")
+    if target.role is Role.admin and not actor.is_root:
+        raise APIError(403, "root_required", "Only the first admin can reset an admin's password")
     # The rule is the target's: a farmer may be given eight characters.
     password_policy.check(target.role, body.password)
     target.password_hash = security.hash_password(body.password)
