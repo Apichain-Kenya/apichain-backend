@@ -119,6 +119,9 @@ class BatchSummary(BaseModel):
     state: str
     honey_type: str | None
     apiary_name: str | None
+    # Whose honey it is (13 §6): the one fact about the farmer every role
+    # sees. Contact details stay on the farmer reads (D7).
+    farmer_display_name: str | None
     created_at: dt.datetime
     state_updated_at: dt.datetime
 
@@ -169,11 +172,23 @@ class BatchStageOut(BaseModel):
     anchor_status: Literal["pending", "anchored", "confirmed"]
 
 
+class NextAction(BaseModel):
+    """The one step this batch can take next, and whether the caller may take
+    it (13 D10). Computed on the server from the lifecycle and the RBAC table,
+    so the client keeps no copy of either. `allowed` is advice for the screen;
+    the write route still checks."""
+
+    action: str
+    target_state: str
+    allowed: bool
+
+
 class BatchDetail(BaseModel):
     id: int
     public_id: str
     batch_code: str
     farmer_id: int
+    farmer_display_name: str | None
     state: str
     created_at: dt.datetime
     state_updated_at: dt.datetime
@@ -182,3 +197,5 @@ class BatchDetail(BaseModel):
     stages: list[BatchStageOut]
     conformance_verdict: Literal["pass", "fail", "incomplete"] | None
     anchor_status: Literal["pending", "partial", "anchored", "confirmed"]
+    # Null once the batch is DISTRIBUTED (terminal).
+    next_action: NextAction | None

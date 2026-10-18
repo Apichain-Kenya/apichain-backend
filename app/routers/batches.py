@@ -9,12 +9,12 @@ import uuid
 
 from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import requires
+from app.deps import ACTION_ROLES, requires
 from app.enums import Role
 from app.errors import APIError, error_responses
 from app.models import (
@@ -34,6 +34,7 @@ from app.models import (
     User,
 )
 from app.routers._context import request_context
+from app.routers._search import ESCAPE, like_escape
 from app.schemas.batches import (
     BatchApiaryOut,
     BatchCreateRequest,
@@ -43,6 +44,7 @@ from app.schemas.batches import (
     BatchResponse,
     BatchStageOut,
     BatchSummary,
+    NextAction,
     StageRecordedResponse,
 )
 from app.schemas.common import IdempotencyKeyHeader
@@ -58,9 +60,11 @@ from app.services import (
     audit_log,
     codex_scoring,
     idempotency,
+    identity,
     ownership,
     stage_payloads,
     stage_writer,
+    transitions,
 )
 
 # honey_batches.id is a 32-bit integer. Declaring the bound on the path
@@ -438,7 +442,8 @@ def record_distribution(
 @router.get("", response_model=BatchPage, responses=error_responses(401, 403))
 def list_batches(
     farmer_id: int | None = Query(default=None, ge=1, le=_MAX_INT4),
-    state: BatchState | None = None,
+    state: list[BatchState] | None = Query(default=None),
+    q: str | None = Query(default=None, min_length=1, max_length=40),
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, pattern=r"^[1-9][0-9]{0,9}$"),
     db: Session = Depends(get_db),
@@ -449,6 +454,11 @@ def list_batches(
 
     Pages are keyed on `id`, which only grows, so a batch created while the
     client is paging never shifts or repeats a later page.
+
+    `state` repeats (`?state=HARVESTED&state=LAB_VERIFIED`), which is how a
+    console work queue spanning several steps is one request (13 §6). `q`
+    finds a batch by the start of its code (as printed on a tub) or by its
+    exact public id (as in a jar's QR).
     """
     if actor.role is Role.farmer:
         own = ownership.farmer_profile_id(db, actor)
@@ -459,8 +469,9 @@ def list_batches(
         farmer_id = own
 
     query = (
-        select(HoneyBatch, BatchMetadata.honey_type, ApiaryLocation.name)
+        select(HoneyBatch, BatchMetadata.honey_type, ApiaryLocation.name, Farmer)
         .outerjoin(BatchMetadata, BatchMetadata.batch_id == HoneyBatch.id)
+        .outerjoin(Farmer, Farmer.id == HoneyBatch.farmer_id)
         .outerjoin(ApiaryRecord, ApiaryRecord.batch_id == HoneyBatch.id)
         .outerjoin(ApiaryLocation, ApiaryLocation.id == ApiaryRecord.apiary_id)
         .order_by(HoneyBatch.id.desc())
@@ -468,8 +479,16 @@ def list_batches(
     )
     if farmer_id is not None:
         query = query.where(HoneyBatch.farmer_id == farmer_id)
-    if state is not None:
-        query = query.where(HoneyBatch.state == state)
+    if state:
+        query = query.where(HoneyBatch.state.in_(state))
+    if q is not None:
+        term = q.strip()
+        query = query.where(
+            or_(
+                HoneyBatch.batch_code.ilike(f"{like_escape(term)}%", escape=ESCAPE),
+                HoneyBatch.public_id == term,
+            )
+        )
     if cursor is not None:
         query = query.where(HoneyBatch.id < int(cursor))
 
@@ -484,10 +503,11 @@ def list_batches(
                 state=str(b.state),
                 honey_type=honey_type,
                 apiary_name=apiary_name,
+                farmer_display_name=identity.farmer_name(farmer) if farmer else None,
                 created_at=b.created_at,
                 state_updated_at=b.state_updated_at,
             )
-            for b, honey_type, apiary_name in page
+            for b, honey_type, apiary_name, farmer in page
         ],
         next_cursor=str(page[-1][0].id) if len(rows) > limit else None,
     )
@@ -540,6 +560,7 @@ def read_batch(
         .all()
     )
     names = _display_names(db, {r.actor_id for r in rows if r.actor_id is not None})
+    owner = db.get(Farmer, batch.farmer_id)
     conformance = db.execute(
         select(CodexConformance.verdict).where(CodexConformance.batch_id == batch.id)
     ).scalar_one_or_none()
@@ -549,6 +570,7 @@ def read_batch(
         public_id=batch.public_id,
         batch_code=batch.batch_code,
         farmer_id=batch.farmer_id,
+        farmer_display_name=identity.farmer_name(owner) if owner is not None else None,
         state=str(batch.state),
         created_at=batch.created_at,
         state_updated_at=batch.state_updated_at,
@@ -569,17 +591,35 @@ def read_batch(
         ],
         conformance_verdict=str(conformance).lower() if conformance is not None else None,  # type: ignore[arg-type]
         anchor_status=anchor_proof.rollup(entries),  # type: ignore[arg-type]
+        next_action=_next_action(batch.state, actor),
+    )
+
+
+# The RBAC action that moves a batch *into* each state (13 D10). Keyed by
+# target, so its keys must equal the values of `transitions.LEGAL` (a test
+# holds that): a new state cannot appear without the console learning who may
+# take a batch there. Read alongside `transitions` and `ACTION_ROLES`; neither
+# changes for this.
+_ACTION_FOR: dict[BatchState, str] = {
+    BatchState.HARVESTED: "batch.harvest_record",
+    BatchState.PROCESSED: "batch.process_record",
+    BatchState.LAB_VERIFIED: "batch.lab_verify",
+    BatchState.PACKAGED: "batch.package",
+    BatchState.DISTRIBUTED: "batch.distribute",
+}
+
+
+def _next_action(state: BatchState, actor: User) -> NextAction | None:
+    target = transitions.next_state(state)
+    if target is None:
+        return None
+    action = _ACTION_FOR[target]
+    return NextAction(
+        action=action, target_state=str(target), allowed=actor.role in ACTION_ROLES[action]
     )
 
 
 def _display_names(db: Session, user_ids: set[int]) -> dict[int, str]:
-    """Farmer users by their name, staff by their username (as `/me`)."""
-    if not user_ids:
-        return {}
-    names: dict[int, str] = {}
-    for user in db.execute(select(User).where(User.id.in_(user_ids))).scalars():
-        names[user.id] = user.username or user.phone or f"user {user.id}"
-    for farmer in db.execute(select(Farmer).where(Farmer.user_id.in_(user_ids))).scalars():
-        assert farmer.user_id is not None
-        names[farmer.user_id] = f"{farmer.first_name} {farmer.last_name}"
-    return names
+    """The shared naming rule (13 D6): farmers by their profile, staff by
+    `full_name`, then the username."""
+    return identity.display_names(db, user_ids)

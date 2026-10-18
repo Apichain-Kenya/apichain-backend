@@ -643,6 +643,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "farmer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Farmer Display Name"
+          },
           "farmer_id": {
             "title": "Farmer Id",
             "type": "integer"
@@ -655,6 +666,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BatchMetadataOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextAction"
               },
               {
                 "type": "null"
@@ -687,6 +708,7 @@
           "public_id",
           "batch_code",
           "farmer_id",
+          "farmer_display_name",
           "state",
           "created_at",
           "state_updated_at",
@@ -694,7 +716,8 @@
           "apiary",
           "stages",
           "conformance_verdict",
-          "anchor_status"
+          "anchor_status",
+          "next_action"
         ],
         "title": "BatchDetail",
         "type": "object"
@@ -969,6 +992,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "farmer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Farmer Display Name"
+          },
           "honey_type": {
             "anyOf": [
               {
@@ -1005,6 +1039,7 @@
           "state",
           "honey_type",
           "apiary_name",
+          "farmer_display_name",
           "created_at",
           "state_updated_at"
         ],
@@ -1523,6 +1558,157 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "FarmerDetail": {
+        "description": "`GET /v2/farmers/{id}`: the profile with its verification state. A\nfarmer may read only their own. Consents stay on their own endpoint.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "apiaries_count": {
+            "title": "Apiaries Count",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "documents_count": {
+            "title": "Documents Count",
+            "type": "integer"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Verified At"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "title": "Enrolled At",
+            "type": "string"
+          },
+          "enrolled_by_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolled By Display Name"
+          },
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "has_email": {
+            "title": "Has Email",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_name": {
+            "title": "Last Name",
+            "type": "string"
+          },
+          "number_of_hives": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number Of Hives"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "phone_verified": {
+            "title": "Phone Verified",
+            "type": "boolean"
+          },
+          "phone_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Verified At"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "phone",
+          "number_of_hives",
+          "phone_verified",
+          "email_verified",
+          "enrolled_at",
+          "enrolled_by_display_name",
+          "first_name",
+          "last_name",
+          "email",
+          "address",
+          "user_id",
+          "has_email",
+          "phone_verified_at",
+          "email_verified_at",
+          "documents_count",
+          "apiaries_count"
+        ],
+        "title": "FarmerDetail",
+        "type": "object"
+      },
       "FarmerEnrollRequest": {
         "properties": {
           "address": {
@@ -1604,6 +1790,34 @@
         "title": "FarmerEnrollRequest",
         "type": "object"
       },
+      "FarmerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FarmerSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "FarmerPage",
+        "type": "object"
+      },
       "FarmerResponse": {
         "properties": {
           "first_name": {
@@ -1642,6 +1856,70 @@
           "user_id"
         ],
         "title": "FarmerResponse",
+        "type": "object"
+      },
+      "FarmerSummary": {
+        "description": "One row of `GET /v2/farmers`: field officers and admins only (D7), so\nthe phone is in it. No `data_access` audit row yet (Phase 5, 12 D17).",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "title": "Enrolled At",
+            "type": "string"
+          },
+          "enrolled_by_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolled By Display Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "number_of_hives": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number Of Hives"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "phone_verified": {
+            "title": "Phone Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "phone",
+          "number_of_hives",
+          "phone_verified",
+          "email_verified",
+          "enrolled_at",
+          "enrolled_by_display_name"
+        ],
+        "title": "FarmerSummary",
         "type": "object"
       },
       "GrantedVia": {
@@ -1988,6 +2266,10 @@
             ],
             "title": "Farmer Id"
           },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
           "role": {
             "$ref": "#/components/schemas/Role"
           },
@@ -2000,7 +2282,8 @@
           "user_id",
           "role",
           "display_name",
-          "farmer_id"
+          "farmer_id",
+          "must_change_password"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -2042,6 +2325,30 @@
         "title": "MetadataPublic",
         "type": "object"
       },
+      "NextAction": {
+        "description": "The one step this batch can take next, and whether the caller may take\nit (13 D10). Computed on the server from the lifecycle and the RBAC table,\nso the client keeps no copy of either. `allowed` is advice for the screen;\nthe write route still checks.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "target_state": {
+            "title": "Target State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "target_state",
+          "allowed"
+        ],
+        "title": "NextAction",
+        "type": "object"
+      },
       "PackagingRecordRequest": {
         "description": "S4. One QR per batch, so v1's per-jar `qr_codes` is gone; `unit_count`\nalready equals the jar count.",
         "properties": {
@@ -2077,6 +2384,44 @@
           "unit_count"
         ],
         "title": "PackagingRecordRequest",
+        "type": "object"
+      },
+      "PasswordChangeRequest": {
+        "description": "Change your own password (13 \u00a75 item 9). Length is checked by the\nshared policy for the caller's role, so the error is one envelope.",
+        "properties": {
+          "current_password": {
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChangeRequest",
+        "type": "object"
+      },
+      "PasswordResetRequest": {
+        "properties": {
+          "password": {
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "PasswordResetRequest",
         "type": "object"
       },
       "PingResponse": {
@@ -2446,6 +2791,136 @@
           "status"
         ],
         "title": "StatusResponse",
+        "type": "object"
+      },
+      "UserCreateRequest": {
+        "properties": {
+          "full_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Full Name",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Password",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "field_officer",
+              "operator",
+              "lab_officer",
+              "admin"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "username": {
+            "pattern": "^[a-z][a-z0-9._-]{2,39}$",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "full_name",
+          "role",
+          "password"
+        ],
+        "title": "UserCreateRequest",
+        "type": "object"
+      },
+      "UserOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_root": {
+            "title": "Is Root",
+            "type": "boolean"
+          },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "full_name",
+          "role",
+          "is_active",
+          "is_root",
+          "must_change_password",
+          "created_at"
+        ],
+        "title": "UserOut",
+        "type": "object"
+      },
+      "UserPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "UserPage",
         "type": "object"
       },
       "ValidationError": {
@@ -2954,6 +3429,102 @@
         ]
       }
     },
+    "/v2/auth/password": {
+      "post": {
+        "description": "Choose your own password (13 \u00a75 item 9, D5).\n\nUnder `/v2/auth`, like refresh, so the session cookie can be re-set on the\npath it lives on, and it needs the same `X-ApiChain-Client` header. It\nadmits an account that must change its password, which is the point.\n\nEvery refresh token the account holds is revoked and one fresh session is\nissued to this caller: they stay signed in here, and every other device\n(perhaps the one of whoever chose the old password) is signed out. Access\ntokens already issued elsewhere expire on their own within the access TTL.\nWrong-password guessing needs a live session for the account; per-IP\nlimits on this and on login are Phase 5 (04 \u00a75.8).",
+        "operationId": "change_password_v2_auth_password_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-ApiChain-Client",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Apichain-Client"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Change Password V2 Auth Password Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v2/auth/refresh": {
       "post": {
         "operationId": "refresh_v2_auth_refresh_post",
@@ -3044,7 +3615,7 @@
     },
     "/v2/batches": {
       "get": {
-        "description": "Newest first. A farmer always sees only their own batches; naming\nanother farmer is refused, not silently narrowed.\n\nPages are keyed on `id`, which only grows, so a batch created while the\nclient is paging never shifts or repeats a later page.",
+        "description": "Newest first. A farmer always sees only their own batches; naming\nanother farmer is refused, not silently narrowed.\n\nPages are keyed on `id`, which only grows, so a batch created while the\nclient is paging never shifts or repeats a later page.\n\n`state` repeats (`?state=HARVESTED&state=LAB_VERIFIED`), which is how a\nconsole work queue spanning several steps is one request (13 \u00a76). `q`\nfinds a batch by the start of its code (as printed on a tub) or by its\nexact public id (as in a jar's QR).",
         "operationId": "list_batches_v2_batches_get",
         "parameters": [
           {
@@ -3072,13 +3643,34 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/BatchState"
+                  "items": {
+                    "$ref": "#/components/schemas/BatchState"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
               "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {
@@ -4031,6 +4623,113 @@
       }
     },
     "/v2/farmers": {
+      "get": {
+        "description": "Every farmer, newest first, for field officers and admins (D7): an\nofficer covering a colleague's area must find that colleague's farmers.\n`q` matches the start of a first name, a last name or the full name, or\nthe end of a phone number, ignoring case.",
+        "operationId": "list_farmers_v2_farmers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[1-9][0-9]{0,9}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FarmerPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Farmers",
+        "tags": [
+          "farmers"
+        ]
+      },
       "post": {
         "operationId": "enroll_farmer_v2_farmers_post",
         "parameters": [
@@ -4104,6 +4803,97 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Enroll Farmer V2 Farmers Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enroll Farmer",
+        "tags": [
+          "farmers"
+        ]
+      }
+    },
+    "/v2/farmers/{farmer_id}": {
+      "get": {
+        "description": "A farmer's profile. A farmer reads only their own (ownership check);\noperators and lab officers never reach it (D7).",
+        "operationId": "read_farmer_v2_farmers__farmer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "farmer_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Farmer Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FarmerDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
@@ -4116,7 +4906,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Enroll Farmer",
+        "summary": "Read Farmer",
         "tags": [
           "farmers"
         ]
@@ -4767,6 +5557,7 @@
     },
     "/v2/me": {
       "get": {
+        "description": "Answers even while the password must still be changed: it is how the\nclient learns that it must ask for the change (13 D5).",
         "operationId": "me_v2_me_get",
         "responses": {
           "200": {
@@ -4941,6 +5732,452 @@
         "summary": "Verify Batch",
         "tags": [
           "public"
+        ]
+      }
+    },
+    "/v2/users": {
+      "get": {
+        "description": "Staff accounts, newest first. Farmers are listed under `/v2/farmers`.",
+        "operationId": "list_users_v2_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Role"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[1-9][0-9]{0,9}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Users",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "operationId": "create_user_v2_users_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Create User V2 Users Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/v2/users/{user_id}/deactivate": {
+      "post": {
+        "operationId": "deactivate_user_v2_users__user_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deactivate User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/v2/users/{user_id}/reset-password": {
+      "post": {
+        "description": "Set a new starting password for someone else, a farmer included (a\nfarmer who forgot theirs asks an admin). The owner must change it at their\nnext sign-in, and every session they hold ends now.\n\nA reset needs no current password, so three targets are refused. Without\nthese refusals a reset would let one admin take over another account: they\ncould reset it, sign in before the owner does, and complete the forced\nchange themselves.\n- Your own account: a stolen access token must not let anyone skip the\n  current password that `/v2/auth/password` asks for.\n- The root admin: recovered only from the server (`scripts/reset_root.py`).\n- Another admin, unless you are the root admin: otherwise any admin could\n  take over a fellow admin's account.",
+        "operationId": "reset_password_v2_users__user_id__reset_password_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Malformed request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RequestValidationErrorResponse"
+                    }
+                  ],
+                  "title": "Response 422 Reset Password V2 Users  User Id  Reset Password Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Password",
+        "tags": [
+          "users"
         ]
       }
     }

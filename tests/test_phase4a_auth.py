@@ -203,6 +203,7 @@ def test_me_for_a_farmer_returns_their_farmer_id(client, migrated_engine):
         "role": "farmer",
         "display_name": "A B",
         "farmer_id": farmer_id,
+        "must_change_password": False,
     }
 
 
@@ -215,6 +216,7 @@ def test_me_for_staff_has_no_farmer_id(client, migrated_engine):
         "role": "field_officer",
         "display_name": "officer112",
         "farmer_id": None,
+        "must_change_password": False,
     }
 
 

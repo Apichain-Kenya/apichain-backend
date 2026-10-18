@@ -13,7 +13,7 @@ work, keeping the Phase 1 baseline PostGIS-free.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -36,6 +36,15 @@ class User(Base):
     # super_admin collapses into admin with is_root for the bootstrap only (04 §5.3).
     is_root: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # A staff member's name, shown wherever they are named as the actor
+    # (13 D6). Farmers are named from their `farmers` profile instead.
+    full_name: Mapped[str | None] = mapped_column(String(120), info={"pii": "identity"})
+    # Someone else chose this password (enrolment, account creation, an admin
+    # reset), so they know it: every route but /me and /auth/password refuses
+    # the account until its owner changes it (13 D5, 03 §13.1).
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
