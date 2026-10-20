@@ -9,18 +9,31 @@ P4a-B (12 D12):
   the consumer is shown.
 - The User-Agent names this project (Nominatim's policy requires a real one;
   v1 sent `AgriScanAI-App`).
-- A 3 s timeout, because the call sits in the apiary-create request.
+- A 3 s timeout. The call is made with no database connection held (14 D19):
+  the apiary-create handler ends its read transaction first.
 
 Fail-soft: any error returns None, and the apiary is created without a
-locality. The result is a display label, never part of a hashed payload.
+locality. Every miss is logged with its reason (never the point), and
+`backfill_localities` fills the gap later. The result is a display label,
+never part of a hashed payload.
 """
 
+import logging
+import time
 from collections.abc import Callable
 from decimal import ROUND_HALF_EVEN, Decimal
 
 import requests
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models import ApiaryLocation
+
+logger = logging.getLogger("apichain.geocode")
+
+# Nominatim's usage policy: at most one request per second.
+BACKFILL_INTERVAL_SECONDS = 1.0
 
 _NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
 _USER_AGENT = "ApiChainKenya/2 (+https://github.com/Apichain-Kenya/apichain-backend)"
@@ -48,6 +61,7 @@ def reverse_geocode(latitude: Decimal, longitude: Decimal) -> str | None:
             timeout=3,
         )
         if r.status_code != 200:
+            logger.warning("locality lookup refused: HTTP %s", r.status_code)
             return None
         addr = (r.json() or {}).get("address", {})
         parts = [
@@ -57,7 +71,8 @@ def reverse_geocode(latitude: Decimal, longitude: Decimal) -> str | None:
         ]
         label = ", ".join(p for p in parts if p)
         return label[:120] or None
-    except Exception:
+    except Exception as exc:
+        logger.warning("locality lookup failed: %s", type(exc).__name__)
         return None
 
 
@@ -71,3 +86,41 @@ def from_settings() -> Geocoder:
     if settings.geocoder_backend == "none":
         return _no_lookup
     return reverse_geocode
+
+
+def backfill_localities(
+    db: Session,
+    geocoder: Geocoder,
+    *,
+    pause: Callable[[float], None] = time.sleep,
+) -> int:
+    """Look up every apiary that has no locality yet; returns how many it filled.
+
+    One lookup per second, and each filled row is committed on its own, so an
+    interrupted run keeps what it did and a re-run picks up the rest. A miss
+    leaves the row NULL for the next run. `locality` is outside every hashed
+    payload, so writing it later changes no record's hash.
+    """
+    ids = (
+        db.execute(
+            select(ApiaryLocation.id)
+            .where(ApiaryLocation.locality.is_(None))
+            .order_by(ApiaryLocation.id)
+        )
+        .scalars()
+        .all()
+    )
+    filled = 0
+    for n, apiary_id in enumerate(ids):
+        if n:
+            pause(BACKFILL_INTERVAL_SECONDS)
+        apiary = db.get(ApiaryLocation, apiary_id)
+        if apiary is None or apiary.locality is not None:
+            continue
+        label = geocoder(*locality_point(apiary.latitude, apiary.longitude))
+        if label is None:
+            continue
+        apiary.locality = label
+        db.commit()
+        filled += 1
+    return filled

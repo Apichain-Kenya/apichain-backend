@@ -34,6 +34,7 @@ from app.services import (
     identity,
     ownership,
     password_policy,
+    phone,
     security,
 )
 
@@ -71,17 +72,24 @@ def enroll_farmer(
         return JSONResponse(status_code=idem.replay.status_code, content=idem.replay.body)
     password_policy.check(Role.farmer, body.password)
 
+    # One number, one form (14 D18): the stored phone is the farmer's sign-in
+    # identifier and the SMS recipient, so "0745 220 961" and "+254745220961"
+    # must not become two people.
+    phone_e164 = phone.to_e164_ke(body.phone)
+    if phone_e164 is None:
+        raise APIError(422, "invalid_phone", "Not a Kenyan mobile number")
+
     clash = db.execute(
-        select(User.id).where(or_(User.phone == body.phone, User.username == body.phone))
+        select(User.id).where(or_(User.phone == phone_e164, User.username == phone_e164))
     ).first()
     if (
         clash is not None
-        or db.execute(select(Farmer.id).where(Farmer.phone == body.phone)).first() is not None
+        or db.execute(select(Farmer.id).where(Farmer.phone == phone_e164)).first() is not None
     ):
         raise APIError(409, "phone_taken", "A user with this phone already exists")
 
     user = User(
-        phone=body.phone,
+        phone=phone_e164,
         password_hash=security.hash_password(body.password),
         role=Role.farmer,
         is_root=False,
@@ -96,7 +104,7 @@ def enroll_farmer(
     farmer = Farmer(
         first_name=body.first_name,
         last_name=body.last_name,
-        phone=body.phone,
+        phone=phone_e164,
         email=body.email,
         address=body.address,
         number_of_hives=body.number_of_hives,
@@ -126,13 +134,9 @@ def enroll_farmer(
         subject_type="farmer",
         subject_id=str(farmer.id),
         action="farmer.enrolled",
-        payload={
-            "farmer_id": farmer.id,
-            "first_name": body.first_name,
-            "last_name": body.last_name,
-            "phone": body.phone,
-            "enrolled_by": actor.id,
-        },
+        # Ids only: the name and phone live in `farmers`, which erasure can
+        # redact; an audit payload is hashed into the chain (14 §0 #9).
+        payload={"farmer_id": farmer.id, "enrolled_by": actor.id},
         ip=ip,
         user_agent=user_agent,
     )

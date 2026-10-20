@@ -179,7 +179,9 @@ def create_batch(
         subject_type="batch",
         subject_id=str(batch.id),
         action="batch.created",
-        payload={"batch_code": batch.batch_code, "farmer_id": farmer.id, "state": "CREATED"},
+        # No batch_code: it may be client-supplied free text, and a name or a
+        # phone ends up in it (schemas/verify.py); payloads are ids only (14 §0 #9).
+        payload={"farmer_id": farmer.id, "state": "CREATED"},
         ip=ip,
         user_agent=user_agent,
     )
@@ -461,9 +463,17 @@ def list_batches(
     exact public id (as in a jar's QR).
     """
     if actor.role is Role.farmer:
+        # One profile lookup answers both questions (14 P5-A): naming another
+        # farmer is refused with that id in the details, and a farmer
+        # credential with no profile owns nothing.
         own = ownership.farmer_profile_id(db, actor)
-        if farmer_id is not None:
-            ownership.assert_acts_for_farmer(db, actor, farmer_id)
+        if farmer_id is not None and farmer_id != own:
+            raise APIError(
+                403,
+                "forbidden",
+                "A farmer may only act on their own records",
+                {"farmer_id": farmer_id},
+            )
         if own is None:
             raise APIError(403, "forbidden", "A farmer may only act on their own records")
         farmer_id = own

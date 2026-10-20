@@ -88,14 +88,9 @@ def create_user(
         subject_type="user",
         subject_id=str(user.id),
         action="user.created",
-        # No password and no full name: the name lives in `users`, not in a
-        # row that can never be deleted (minimisation).
-        payload={
-            "user_id": user.id,
-            "username": user.username,
-            "role": str(role),
-            "created_by": actor.id,
-        },
+        # No password, no full name and no username: they live in `users`, not
+        # in a row that can never be deleted (minimisation, 14 §0 #9).
+        payload={"user_id": user.id, "role": str(role), "created_by": actor.id},
         ip=ip,
         user_agent=user_agent,
     )

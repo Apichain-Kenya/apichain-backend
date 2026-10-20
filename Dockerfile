@@ -9,9 +9,10 @@ RUN uv sync --frozen --no-dev
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-# The two operator scripts a deployment needs (13 D3): the first admin, and the
-# root admin's recovery. Dev-only scripts (seeds, the live walk) stay out.
-COPY scripts/create_admin.py scripts/reset_root.py ./scripts/
+# The operator scripts a deployment needs: the first admin and the root admin's
+# recovery (13 D3), and the locality backfill (14 D19). Dev-only scripts (seeds,
+# the live walk) stay out.
+COPY scripts/create_admin.py scripts/reset_root.py scripts/backfill_locality.py ./scripts/
 RUN useradd --create-home apichain && chown -R apichain /srv
 USER apichain
 EXPOSE 8000

@@ -29,7 +29,14 @@ from app.schemas.auth import (
     PasswordChangeRequest,
     StatusResponse,
 )
-from app.services import audit_log, identity, password_policy, refresh_tokens, security
+from app.services import (
+    audit_log,
+    identity,
+    password_policy,
+    phone,
+    refresh_tokens,
+    security,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 me_router = APIRouter(tags=["auth"])
@@ -74,16 +81,34 @@ def _access(user: User) -> AccessTokenResponse:
     )
 
 
+def _find_login_user(db: Session, identifier: str) -> User | None:
+    """The active account a sign-in identifier names.
+
+    The identifier as typed is tried first, so a username, or a phone stored
+    in another form before P5-A, signs in unchanged. A phone typed any other
+    way a Kenyan writes it is then tried in E.164, the form enrolment stores
+    (14 D18). Two lookups rather than one `IN`, so an old raw-form row and a
+    new E.164 row for the same number can never make the match ambiguous.
+    """
+    for candidate in dict.fromkeys((identifier, phone.to_e164_ke(identifier))):
+        if candidate is None:
+            continue
+        user = db.execute(
+            select(User).where(
+                or_(User.username == candidate, User.phone == candidate),
+                User.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if user is not None:
+            return user
+    return None
+
+
 @router.post("/login", response_model=AccessTokenResponse, responses=error_responses(401))
 def login(
     body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
 ) -> AccessTokenResponse:
-    user = db.execute(
-        select(User).where(
-            or_(User.username == body.identifier, User.phone == body.identifier),
-            User.is_active.is_(True),
-        )
-    ).scalar_one_or_none()
+    user = _find_login_user(db, body.identifier)
     if user is None or not security.verify_password(body.password, user.password_hash):
         raise APIError(401, "invalid_credentials", "Invalid credentials")
 

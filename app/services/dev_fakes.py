@@ -86,18 +86,25 @@ def redact_body(body: str) -> str:
     return _DIGIT.sub("*", body)
 
 
-def _shown(to: str, body: str) -> tuple[str, str]:
+def _shown(to: str, body: str) -> tuple[str, str, int]:
+    """What to log, and at what level.
+
+    With bodies on, the line goes out at WARNING: the api prints WARNING and
+    above and nothing below, so at INFO a developer finishing a phone check
+    could never read the code (ledger P4b-H). A secret in a log is worth a
+    warning anyway, and the flag is for dev machines only.
+    """
     if settings.dev_log_message_bodies:
-        return to, body
-    return redact_recipient(to), redact_body(body)
+        return to, body, logging.WARNING
+    return redact_recipient(to), redact_body(body), logging.INFO
 
 
 class LogSms:
     provider = "fake"
 
     def send(self, to: str, body: str) -> str:
-        shown_to, shown_body = _shown(to, body)
-        logger.info("[fake sms] to=%s body=%s", shown_to, shown_body)
+        shown_to, shown_body, level = _shown(to, body)
+        logger.log(level, "[fake sms] to=%s body=%s", shown_to, shown_body)
         return f"fake-{uuid.uuid4().hex[:12]}"
 
 
@@ -105,6 +112,6 @@ class LogEmail:
     provider = "fake"
 
     def send(self, to: str, subject: str, body: str) -> str:
-        shown_to, shown_body = _shown(to, body)
-        logger.info("[fake email] to=%s subject=%s body=%s", shown_to, subject, shown_body)
+        shown_to, shown_body, level = _shown(to, body)
+        logger.log(level, "[fake email] to=%s subject=%s body=%s", shown_to, subject, shown_body)
         return f"<fake-{uuid.uuid4().hex[:12]}@apichain.invalid>"

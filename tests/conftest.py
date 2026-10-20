@@ -13,7 +13,7 @@ import psycopg
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -67,7 +67,10 @@ def migrated_engine():
     finally:
         app.config.settings.database_url = original
 
-    engine = create_engine(url)
+    # The same connection settings the app uses, the UTC pin included (14 D20).
+    from app.database import make_engine
+
+    engine = make_engine(url)
     try:
         yield engine
     finally:

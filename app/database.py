@@ -7,7 +7,7 @@ autogenerate target. The v2 schema baseline is authored in Phase 1.
 
 from collections.abc import Generator
 
-from sqlalchemy import MetaData, create_engine
+from sqlalchemy import Engine, MetaData, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
@@ -27,7 +27,20 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-engine = create_engine(settings.database_url)
+def make_engine(url: str) -> Engine:
+    """Every connection runs in UTC (14 D20).
+
+    Seventeen columns default to the database's `now()`. Under a session zone
+    other than UTC (the native test Postgres runs in Nairobi) those naive
+    `DateTime` columns would store local wall time, three hours off what the
+    application writes itself. Pinning the zone at connect time fixes all of
+    them at once and needs no migration; existing values are never rewritten,
+    since some sit inside hashed payloads.
+    """
+    return create_engine(url, connect_args={"options": "-c TimeZone=UTC"})
+
+
+engine = make_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
