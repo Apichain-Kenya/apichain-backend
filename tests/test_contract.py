@@ -21,12 +21,33 @@ from app.main import app
 _ALL_TABLES = (
     "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
+    "rate_limit_events, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "
     "apiary_locations, honey_batches, farmers, users"
 )
 
 schema = schemathesis.openapi.from_asgi("/openapi.json", app)
+
+
+@pytest.fixture(autouse=True)
+def _limits_out_of_the_way(monkeypatch):
+    """Schemathesis sends hundreds of requests per operation from one address,
+    so the P5-B limiter would rightly answer 429, and its positive-data check
+    counts that as a valid request rejected. This test is about the schema;
+    the limits have their own tests (`test_phase5a_rate_limits.py`), and the
+    429 they return is documented on every limited route."""
+    from app.config import settings
+
+    for name in (
+        "login_pair_failures_max",
+        "login_identifier_failures_max",
+        "login_ip_attempts_max",
+        "password_change_failures_max",
+        "verification_send_ip_max",
+        "upload_ip_max",
+    ):
+        monkeypatch.setattr(settings, name, 1_000_000)
 
 
 @pytest.fixture(autouse=True)

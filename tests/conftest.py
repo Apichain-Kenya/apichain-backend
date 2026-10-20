@@ -26,6 +26,7 @@ from alembic import command
 _ALL_TABLES = (
     "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
+    "rate_limit_events, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "
     "apiary_locations, honey_batches, farmers, users"

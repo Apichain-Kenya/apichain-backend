@@ -34,6 +34,7 @@ from app.services import (
     identity,
     password_policy,
     phone,
+    rate_limit,
     refresh_tokens,
     security,
 )
@@ -104,13 +105,31 @@ def _find_login_user(db: Session, identifier: str) -> User | None:
     return None
 
 
-@router.post("/login", response_model=AccessTokenResponse, responses=error_responses(401))
+@router.post("/login", response_model=AccessTokenResponse, responses=error_responses(401, 429))
 def login(
     body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
 ) -> AccessTokenResponse:
+    """Sign in with a phone or username and a password.
+
+    Rate-limited (14 D7): every attempt counts against the client's address,
+    and failures count against the (identifier, address) pair and against the
+    identifier alone. Once a limit is reached the answer is 429 with
+    `Retry-After`, even for the right password, until the window passes.
+    """
+    bind = db.get_bind()
+    address = rate_limit.client_ip(request)
+    ident = rate_limit.identifier_key(body.identifier)
+    pair = rate_limit.pair_key(ident, address)
+    rate_limit.take(bind, rate_limit.LOGIN_IP_ATTEMPTS, address)
+    rate_limit.ensure_allowed(bind, rate_limit.LOGIN_PAIR_FAILURES, pair)
+    rate_limit.ensure_allowed(bind, rate_limit.LOGIN_IDENTIFIER_FAILURES, ident)
+
     user = _find_login_user(db, body.identifier)
     if user is None or not security.verify_password(body.password, user.password_hash):
+        rate_limit.record(bind, rate_limit.LOGIN_PAIR_FAILURES, pair)
+        rate_limit.record(bind, rate_limit.LOGIN_IDENTIFIER_FAILURES, ident)
         raise APIError(401, "invalid_credentials", "Invalid credentials")
+    rate_limit.clear(bind, rate_limit.LOGIN_PAIR_FAILURES, pair)
 
     raw_refresh, _ = refresh_tokens.issue(db, user)
     ip, user_agent = request_context(request)
@@ -196,7 +215,7 @@ def logout(
 @router.post(
     "/password",
     response_model=AccessTokenResponse,
-    responses=error_responses(401, 403, 422),
+    responses=error_responses(401, 403, 422, 429),
 )
 def change_password(
     body: PasswordChangeRequest,
@@ -216,11 +235,16 @@ def change_password(
     issued to this caller: they stay signed in here, and every other device
     (perhaps the one of whoever chose the old password) is signed out. Access
     tokens already issued elsewhere expire on their own within the access TTL.
-    Wrong-password guessing needs a live session for the account; per-IP
-    limits on this and on login are Phase 5 (04 §5.8).
+    Wrong-password guessing needs a live session for the account, and is
+    limited per account (14 D7): after five wrong current passwords in the
+    window the answer is 429, even for the right one.
     """
     _require_client_header(client_header)
+    bind = db.get_bind()
+    account = str(user.id)
+    rate_limit.ensure_allowed(bind, rate_limit.PASSWORD_CHANGE_FAILURES, account)
     if not security.verify_password(body.current_password, user.password_hash):
+        rate_limit.record(bind, rate_limit.PASSWORD_CHANGE_FAILURES, account)
         raise APIError(403, "wrong_password", "The current password is not right")
     if body.new_password == body.current_password:
         raise APIError(

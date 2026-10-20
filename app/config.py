@@ -108,6 +108,30 @@ class Settings(BaseSettings):
     comms_max_attempts: int = 3
     comms_claim_timeout_seconds: int = 300
 
+    # Deployment environment. `production` adds HSTS (P5-B); P5-K's startup
+    # guard keys off it too.
+    app_env: Literal["development", "production"] = "development"
+
+    # Rate limits (P5-B, 14 D7). Login failures count per (identifier, IP) and
+    # per identifier, so someone typing a farmer's number wrong locks out only
+    # their own address; IP limits are generous because Kenyan carriers put
+    # many phones behind one address. Counters key on a peppered hash, so the
+    # table holds no phone, username or IP; the pepper is dev-only here.
+    rate_limit_pepper: str = "dev-only-rate-limit-pepper-change-me"
+    login_window_seconds: int = 15 * 60
+    login_pair_failures_max: int = 10
+    login_identifier_failures_max: int = 50
+    login_ip_attempts_max: int = 100
+    password_change_window_seconds: int = 15 * 60
+    password_change_failures_max: int = 5
+    ip_hourly_window_seconds: int = 60 * 60
+    verification_send_ip_max: int = 30
+    upload_ip_max: int = 60
+    # The header a trusted proxy sets to the client's address
+    # (`do-connecting-ip` on App Platform). Unset, the socket address is used
+    # and every forwarding header is ignored, so a client cannot pick its own.
+    trusted_proxy_header: str | None = None
+
     @field_validator("ots_calendar_urls")
     @classmethod
     def _at_least_one_calendar(cls, value: str) -> str:

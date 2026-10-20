@@ -2,6 +2,7 @@
 
 **Send order.** The provider call sits above the append, as everywhere:
 
+    0. per-address limit (14 D7), counted on every request   -> 429 + Retry-After
     1. farmer, FOR UPDATE (serializes sends for this farmer) -> 404
     2. ownership                                             -> 403
     3. data_processing consent (11 D7)                       -> 422 consent_required
@@ -44,7 +45,7 @@ from app.schemas.verifications import (
     VerificationSendRequest,
     VerificationSentResponse,
 )
-from app.services import audit_log, comms, consent, ownership, phone
+from app.services import audit_log, comms, consent, ownership, phone, rate_limit
 from app.services import verification_codes as codes
 from app.services.mailer import EmailSender
 from app.services.sms import SmsSender
@@ -82,6 +83,9 @@ def send_verification_code(
     sms: SmsSender = Depends(get_sms),
     email: EmailSender = Depends(get_email),
 ) -> VerificationSentResponse:
+    # Per address, before any other work (14 D7): the per-farmer limiter below
+    # cannot stop one client spraying codes across many farmers.
+    rate_limit.take(db.get_bind(), rate_limit.VERIFICATION_SEND_IP, rate_limit.client_ip(request))
     farmer = db.execute(
         # NO KEY UPDATE: serializes sends for this farmer without blocking FK
         # checks that reference the row (see routers/documents.py).

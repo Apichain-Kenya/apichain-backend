@@ -57,7 +57,7 @@ from app.schemas.documents import (
     DocumentResponse,
     DownloadUrlResponse,
 )
-from app.services import audit_log, consent, media, ownership
+from app.services import audit_log, consent, media, ownership, rate_limit
 from app.services.scanner import Scanner, ScannerUnavailable
 from app.services.storage import ObjectStore, StorageUnavailable
 
@@ -121,7 +121,7 @@ def _replay(doc: Document) -> JSONResponse:
     status_code=201,
     responses={
         200: {"model": DocumentResponse, "description": "Already on file for this farmer"},
-        **error_responses(401, 403, 404, 413, 415, 422, 503),
+        **error_responses(401, 403, 404, 413, 415, 422, 429, 503),
     },
 )
 def upload_document(
@@ -134,6 +134,9 @@ def upload_document(
     store: ObjectStore = Depends(get_object_store),
     scanner: Scanner = Depends(get_scanner),
 ) -> DocumentResponse | JSONResponse:
+    # Per address, first (14 D7). The size middleware has already bounded the
+    # body; this bounds how many a client may push through the scanner.
+    rate_limit.take(db.get_bind(), rate_limit.UPLOAD_IP, rate_limit.client_ip(request))
     # FOR UPDATE: a farmer's uploads run one at a time, so two cannot both
     # read the quota sum before either inserts (a race the security review
     # found). Lock order is farmer row, then the audit chain lock in append.

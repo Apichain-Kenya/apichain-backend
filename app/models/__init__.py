@@ -16,7 +16,7 @@ from app.enums import (
 )
 from app.models.anchor import MerkleAnchor
 from app.models.audit import AuditLog, ConsentRecord
-from app.models.auth import IdempotencyKey, RefreshToken
+from app.models.auth import IdempotencyKey, RateLimitEvent, RefreshToken
 from app.models.batch import HoneyBatch
 from app.models.comms import Communication, VerificationCode
 from app.models.identity import Farmer, User
@@ -59,6 +59,7 @@ __all__ = [
     "MerkleAnchor",
     "PackagingRecord",
     "ProcessRecord",
+    "RateLimitEvent",
     "RefreshToken",
     "Role",
     "ScanStatus",

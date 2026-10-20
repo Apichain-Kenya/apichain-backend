@@ -3299,6 +3299,7 @@
     },
     "/v2/auth/login": {
       "post": {
+        "description": "Sign in with a phone or username and a password.\n\nRate-limited (14 D7): every attempt counts against the client's address,\nand failures count against the (identifier, address) pair and against the\nidentifier alone. Once a limit is reached the answer is 429 with\n`Retry-After`, even for the right password, until the window passes.",
         "operationId": "login_v2_auth_login_post",
         "requestBody": {
           "content": {
@@ -3343,6 +3344,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "Login",
@@ -3431,7 +3442,7 @@
     },
     "/v2/auth/password": {
       "post": {
-        "description": "Choose your own password (13 \u00a75 item 9, D5).\n\nUnder `/v2/auth`, like refresh, so the session cookie can be re-set on the\npath it lives on, and it needs the same `X-ApiChain-Client` header. It\nadmits an account that must change its password, which is the point.\n\nEvery refresh token the account holds is revoked and one fresh session is\nissued to this caller: they stay signed in here, and every other device\n(perhaps the one of whoever chose the old password) is signed out. Access\ntokens already issued elsewhere expire on their own within the access TTL.\nWrong-password guessing needs a live session for the account; per-IP\nlimits on this and on login are Phase 5 (04 \u00a75.8).",
+        "description": "Choose your own password (13 \u00a75 item 9, D5).\n\nUnder `/v2/auth`, like refresh, so the session cookie can be re-set on the\npath it lives on, and it needs the same `X-ApiChain-Client` header. It\nadmits an account that must change its password, which is the point.\n\nEvery refresh token the account holds is revoked and one fresh session is\nissued to this caller: they stay signed in here, and every other device\n(perhaps the one of whoever chose the old password) is signed out. Access\ntokens already issued elsewhere expire on their own within the access TTL.\nWrong-password guessing needs a live session for the account, and is\nlimited per account (14 D7): after five wrong current passwords in the\nwindow the answer is 429, even for the right one.",
         "operationId": "change_password_v2_auth_password_post",
         "parameters": [
           {
@@ -3512,6 +3523,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "security": [
@@ -5312,6 +5333,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "503": {
             "content": {

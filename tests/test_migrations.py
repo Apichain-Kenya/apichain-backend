@@ -33,6 +33,7 @@ SPINE_TABLES = {
     "documents",
     "communications",
     "verification_codes",
+    "rate_limit_events",
 }
 ENUM_TYPES = {
     "role",
