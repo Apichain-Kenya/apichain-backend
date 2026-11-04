@@ -297,12 +297,12 @@ def test_audit_health_reads_the_workers_verdict(sessions, client):
     assert client.get("/v2/audit/health").json()["chain_ok"] is False
 
 
-def _message(factory, status: CommStatus) -> None:
+def _message(factory, status: CommStatus, purpose: CommPurpose = CommPurpose.milestone) -> None:
     with factory() as s:
         s.add(
             Communication(
                 channel=CommChannel.sms,
-                purpose=CommPurpose.milestone,
+                purpose=purpose,
                 subject_type="farmer",
                 subject_id=1,
                 recipient="+254700000001",
@@ -327,6 +327,13 @@ def test_an_undelivered_message_after_an_hour_turns_red(sessions, clock):
 
 def test_a_message_that_failed_for_good_is_not_backlog(sessions, clock):
     _message(sessions, CommStatus.failed)
+    clock(hours=3)
+    assert "comms_backlog" not in _failing(sessions)
+
+
+def test_a_stuck_verification_message_is_not_milestone_backlog(sessions, clock):
+    """Codes are sent inline by their route; the worker never drains them."""
+    _message(sessions, CommStatus.sending, CommPurpose.verification)
     clock(hours=3)
     assert "comms_backlog" not in _failing(sessions)
 

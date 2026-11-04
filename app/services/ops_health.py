@@ -30,7 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.enums import CommStatus
+from app.enums import CommPurpose, CommStatus
 from app.models import Communication
 from app.services import anchoring, worker_status
 from app.services.worker_status import ANCHOR_STAMP, INTEGRITY, WORKER
@@ -82,7 +82,11 @@ def failing(db: Session) -> list[str]:
     if settings.comms_enabled:
         oldest_message = db.execute(
             select(func.min(Communication.created_at)).where(
-                Communication.status.in_([CommStatus.queued, CommStatus.sending])
+                # Milestones only: the worker drains nothing else. A verification
+                # code is sent inline by its route, and a row of one left in
+                # `sending` by a crash would hold this red forever.
+                Communication.purpose == CommPurpose.milestone,
+                Communication.status.in_([CommStatus.queued, CommStatus.sending]),
             )
         ).scalar_one_or_none()
         if _older(oldest_message, dt.timedelta(minutes=settings.ops_comms_backlog_minutes), now):
