@@ -36,8 +36,12 @@ def make_engine(url: str) -> Engine:
     application writes itself. Pinning the zone at connect time fixes all of
     them at once and needs no migration; existing values are never rewritten,
     since some sit inside hashed payloads.
+
+    `hide_parameters` keeps bound values (phones, names) out of the text of
+    every SQLAlchemy error, so they cannot reach a log line or a Sentry event
+    that way (P5-C).
     """
-    return create_engine(url, connect_args={"options": "-c TimeZone=UTC"})
+    return create_engine(url, connect_args={"options": "-c TimeZone=UTC"}, hide_parameters=True)
 
 
 engine = make_engine(settings.database_url)

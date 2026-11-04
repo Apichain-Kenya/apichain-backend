@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build image
-        run: docker build -t apichain-backend:ci .
+        run: docker build --build-arg GIT_SHA=${{ github.sha }} -t apichain-backend:ci .
 
   # Shared, reusable cross-repo gates (05 §6.2 guardrail 4). Secret scan lives
   # here so both repos run byte-identical logic; drift cannot creep back in.

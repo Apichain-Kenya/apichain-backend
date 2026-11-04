@@ -132,6 +132,15 @@ class Settings(BaseSettings):
     # and every forwarding header is ignored, so a client cannot pick its own.
     trusted_proxy_header: str | None = None
 
+    # Logs and error tracking (P5-C, 14 D10, D11). Unset, the format follows
+    # `app_env`: JSON in production, plain console lines in development.
+    log_level: str = "INFO"
+    log_format: Literal["json", "console"] | None = None
+    # Sentry runs only when a DSN is set; every event is redacted first.
+    sentry_dsn: str | None = None
+    # The build's git SHA, set by the image (`Dockerfile` `GIT_SHA`).
+    app_release: str | None = None
+
     @field_validator("ots_calendar_urls")
     @classmethod
     def _at_least_one_calendar(cls, value: str) -> str:

@@ -11,11 +11,19 @@ from app.config import settings
 from app.database import SessionLocal
 from app.errors import APIError, api_error_handler, data_error_handler
 from app.middleware.body_limit import UploadSizeLimit
+from app.middleware.request_id import RequestId
 from app.middleware.security_headers import SecurityHeaders
+from app.observability import configure_logging, init_sentry
 from app.routers import v2_router
 from app.services import anchoring, comms_worker, integrity
 
 logger = logging.getLogger("apichain")
+
+# Before the app exists: uvicorn has configured its loggers by the time it
+# imports this module, and Sentry's FastAPI integration must be in place
+# before the first request (P5-C).
+configure_logging()
+init_sentry()
 
 
 @asynccontextmanager
@@ -90,9 +98,12 @@ app.add_middleware(
 # spools a whole multipart body before any handler runs (P3b-E).
 app.add_middleware(UploadSizeLimit)
 
-# Outermost, so every answer gets the headers, a 413 from the size limit
-# included (P5-B).
+# Every answer gets the headers, a 413 from the size limit included (P5-B).
 app.add_middleware(SecurityHeaders)
+
+# Outermost, so the id is bound before anything else runs and every response
+# that passes through user middleware carries it (P5-C).
+app.add_middleware(RequestId)
 
 app.include_router(v2_router)
 
