@@ -21,6 +21,7 @@ from app.models.batch import HoneyBatch
 from app.models.comms import Communication, VerificationCode
 from app.models.identity import Farmer, User
 from app.models.media import Document
+from app.models.ops import WorkerStatus
 from app.models.stages import (
     ApiaryLocation,
     ApiaryRecord,
@@ -65,4 +66,5 @@ __all__ = [
     "ScanStatus",
     "User",
     "VerificationCode",
+    "WorkerStatus",
 ]

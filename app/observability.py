@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, TextIO
 
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.logging import LoggingIntegration
 from structlog.typing import EventDict, WrappedLogger
 
 from app.config import settings
@@ -106,8 +107,8 @@ def configure_logging(stream: TextIO | None = None) -> None:
         uv.handlers.clear()
         uv.propagate = True
     logging.getLogger("uvicorn.access").disabled = True
-    # One INFO line per job run per tick is noise; failures still show.
-    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    # A line per job added and per run is noise; failures still show.
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
     # Code that uses structlog directly renders through the same handler.
     structlog.configure(
@@ -156,6 +157,11 @@ def init_sentry(**overrides: Any) -> bool:
     dsn = overrides.pop("dsn", settings.sentry_dsn)
     if not dsn:
         return False
+    # Log records become breadcrumbs, never events of their own. Unhandled
+    # request errors still reach Sentry through the FastAPI integration, and
+    # the worker sends one event per job turning red (P5-D); an event per
+    # `logger.error` would page on every tick of a failing job.
+    overrides.setdefault("integrations", [LoggingIntegration(level=logging.INFO, event_level=None)])
     sentry_sdk.init(
         dsn=dsn,
         environment=settings.app_env,

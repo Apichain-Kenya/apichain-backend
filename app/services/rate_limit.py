@@ -14,8 +14,8 @@ advisory lock makes "count, then add" one step, so concurrent requests cannot
 both slip under the limit.
 
 No new service: one table and an index (14 §3, "no new infrastructure"). Rows
-for a key are pruned past its window each time that key is touched; rows for
-keys never seen again are left for the worker's prune (P5-D).
+for a key are pruned past its window each time that key is touched; `prune()`,
+run hourly by the worker (P5-D), removes the rest.
 """
 
 import datetime as dt
@@ -204,3 +204,25 @@ def clear(bind: Bind, limit: Limit, key: str) -> None:
             )
         )
         db.commit()
+
+
+_LIMITS = (
+    LOGIN_PAIR_FAILURES,
+    LOGIN_IDENTIFIER_FAILURES,
+    LOGIN_IP_ATTEMPTS,
+    PASSWORD_CHANGE_FAILURES,
+    VERIFICATION_SEND_IP,
+    UPLOAD_IP,
+)
+
+
+def prune(bind: Bind) -> int:
+    """Delete every event older than the longest window: rows for keys never
+    seen again, which the per-key prune cannot reach. Returns the count."""
+    cutoff = _now() - max(limit.window for limit in _LIMITS)
+    with Session(bind) as db:
+        deleted = db.execute(
+            delete(RateLimitEvent).where(RateLimitEvent.at <= cutoff).returning(RateLimitEvent.id)
+        ).all()
+        db.commit()
+    return len(deleted)

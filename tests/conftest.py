@@ -13,6 +13,7 @@ import psycopg
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from sentry_sdk.transport import Transport
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
@@ -26,7 +27,7 @@ from alembic import command
 _ALL_TABLES = (
     "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
-    "rate_limit_events, "
+    "rate_limit_events, worker_status, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "
     "apiary_locations, honey_batches, farmers, users"
@@ -35,8 +36,7 @@ _ALL_TABLES = (
 
 @pytest.fixture(autouse=True, scope="session")
 def _disable_scheduler():
-    """Keep the background integrity scheduler off during tests (P1-G)."""
-    app.config.settings.scheduler_enabled = False
+    """Test settings. (The API no longer starts a scheduler at all, P5-D.)"""
     # No test reaches MinIO, ClamAV, Africa's Talking or SMTP (11 D4). Tests
     # that need to inspect a boundary inject their own fake.
     app.config.settings.storage_backend = "fake"
@@ -171,3 +171,36 @@ def client(migrated_engine, boundaries):
         app.dependency_overrides.clear()
         with migrated_engine.begin() as conn:
             conn.execute(text(f"truncate table {_ALL_TABLES} restart identity cascade"))
+
+
+class _CaptureTransport(Transport):
+    """A Sentry transport that keeps the events instead of sending them."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.events: list[dict] = []
+
+    def capture_envelope(self, envelope) -> None:
+        for item in envelope.items:
+            if item.type == "event":
+                self.events.append(item.payload.json)
+
+
+@pytest.fixture
+def sentry_events():
+    """A live Sentry client (fake DSN) whose events land in this list. Closed
+    and unbound afterwards, so nothing leaks into later tests (P5-C)."""
+    import sentry_sdk
+
+    from app.observability import init_sentry
+
+    transport = _CaptureTransport()
+    assert init_sentry(dsn="https://public@sentry.example.invalid/1", transport=transport)
+    yield transport.events
+    sentry_sdk.get_client().close()
+    for scope in (
+        sentry_sdk.get_global_scope(),
+        sentry_sdk.get_isolation_scope(),
+        sentry_sdk.get_current_scope(),
+    ):
+        scope.set_client(None)

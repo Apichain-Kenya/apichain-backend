@@ -1,6 +1,6 @@
 """The anchoring worker (P2-E/P2-F, 04 §5.9 boundary 4).
 
-Two scheduled jobs, wired into the app lifespan next to the integrity check:
+Two scheduled jobs, run by the worker process (`app/worker.py`, P5-D):
 
 - **stamp** — build a sha256 Merkle root over the next contiguous run of
   committed `audit_log` rows, submit it to OpenTimestamps, write one
@@ -74,6 +74,11 @@ class AnchorStatus:
     # would report a clean bill of health while nothing was being anchored.
     waiting_on_audit_id: int | None = None
     last_error: str | None = None
+    # What the latest tick did: "anchored", "failed" (it reached the
+    # calendars and none accepted the root) or "idle" (nothing to do, the
+    # lock held elsewhere, or waiting on a gap). The worker counts failures
+    # from this, never from `anchor_ok`, which a neutral tick leaves stale.
+    last_outcome: str = "idle"
 
 
 _status = AnchorStatus()
@@ -170,6 +175,7 @@ def stamp_with_session(
     was nothing to anchor or no calendar accepted the root. Does not commit.
     """
     _status.last_run_at = datetime.now(UTC)
+    _status.last_outcome = "idle"
 
     if not try_stamp_lock(db):
         # Another replica is mid-run. Normal operation in a multi-replica
@@ -222,6 +228,7 @@ def stamp_with_session(
     except ots.CalendarUnavailable as exc:
         _status.anchor_ok = False
         _status.last_error = str(exc)
+        _status.last_outcome = "failed"
         logger.warning("anchor run failed, will retry next tick: %s", exc)
         return None
 
@@ -239,6 +246,7 @@ def stamp_with_session(
     _status.anchor_ok = True
     _status.last_error = None
     _status.last_anchor_id = anchor.id
+    _status.last_outcome = "anchored"
     logger.info("anchored audit rows %s-%s as %s", run[0], run[-1], root.hex()[:16])
     return anchor
 
@@ -344,3 +352,40 @@ def run_upgrade(
                 db.commit()
                 confirmed += 1
     return confirmed
+
+
+# --- the backlog: what the public witness has not caught up with yet --------
+
+
+@dataclass(frozen=True)
+class Backlog:
+    """Read by `/v2/audit/anchor-health` and the `/health/ops` alarms (14 D8).
+    Times are naive UTC, as `audit_log` stores them."""
+
+    last_anchored_audit_id: int | None
+    pending_rows: int
+    oldest_unanchored_at: datetime | None
+    pending_anchors: int
+    oldest_pending_anchor_at: datetime | None
+
+
+def backlog(db: Session) -> Backlog:
+    last_anchored = db.execute(select(func.max(MerkleAnchor.to_audit_id))).scalar_one_or_none()
+    # Audit ids are positive, so "everything" is simply "> 0" when nothing has
+    # been anchored yet: no branch, and no subquery to accidentally cross-join.
+    unanchored_from = last_anchored if last_anchored is not None else 0
+    pending_rows, oldest_unanchored = db.execute(
+        select(func.count(), func.min(AuditLog.created_at)).where(AuditLog.id > unanchored_from)
+    ).one()
+    pending_anchors, oldest_pending = db.execute(
+        select(func.count(), func.min(MerkleAnchor.anchored_at)).where(
+            MerkleAnchor.verified_at.is_(None)
+        )
+    ).one()
+    return Backlog(
+        last_anchored_audit_id=last_anchored,
+        pending_rows=pending_rows,
+        oldest_unanchored_at=oldest_unanchored,
+        pending_anchors=pending_anchors,
+        oldest_pending_anchor_at=oldest_pending,
+    )

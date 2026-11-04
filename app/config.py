@@ -35,13 +35,13 @@ class Settings(BaseSettings):
     geocoder_backend: str = "nominatim"
     bcrypt_rounds: int = 12
 
-    # Audit-chain integrity check (P1-G). The scheduler is disabled in tests.
-    scheduler_enabled: bool = True
+    # Audit-chain integrity check (P1-G). Every scheduled job runs in the
+    # worker process (`python -m app.worker`, P5-D), never in the API.
     integrity_check_interval_seconds: int = 300
 
-    # Anchoring (P2-A, 09 §4). `anchor_enabled` is a second switch on top of
-    # `scheduler_enabled` so anchoring can be off in a dev or staging box that
-    # has no outbound network while the integrity job keeps running.
+    # Anchoring (P2-A, 09 §4). `anchor_enabled` lets a dev or staging worker
+    # with no outbound network keep checking chain integrity without failing
+    # an anchor run every tick.
     anchor_enabled: bool = True
     anchor_target: AnchorTarget = AnchorTarget.opentimestamps
     anchor_interval_seconds: int = 300  # dev; ~3600 in staging/prod via env
@@ -133,6 +133,17 @@ class Settings(BaseSettings):
     # (`do-connecting-ip` on App Platform). Unset, the socket address is used
     # and every forwarding header is ignored, so a client cannot pick its own.
     trusted_proxy_header: str | None = None
+
+    # The worker and its alarms (P5-D, 14 §1 Acceptance, D8). `/health/ops`
+    # turns 503 when any of these is crossed; each sits above the worker's
+    # own grace (two anchor intervals on a sequence gap).
+    worker_heartbeat_seconds: int = 30
+    rate_limit_prune_interval_seconds: int = 3600
+    ops_heartbeat_intervals: int = 3
+    ops_anchor_failure_runs: int = 3
+    ops_anchor_lag_intervals: int = 4
+    ops_pending_upgrade_hours: int = 24
+    ops_comms_backlog_minutes: int = 60
 
     # Logs and error tracking (P5-C, 14 D10, D11). Unset, the format follows
     # `app_env`: JSON in production, plain console lines in development.

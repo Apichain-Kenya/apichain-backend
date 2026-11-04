@@ -21,7 +21,7 @@ from app.main import app
 _ALL_TABLES = (
     "verification_codes, communications, documents, "
     "merkle_anchor, audit_log, consent_records, refresh_tokens, idempotency_keys, "
-    "rate_limit_events, "
+    "rate_limit_events, worker_status, "
     "codex_conformance, distribution_records, packaging_records, lab_results, "
     "process_records, harvest_records, batch_metadata, apiary_records, "
     "apiary_locations, honey_batches, farmers, users"
@@ -48,6 +48,17 @@ def _limits_out_of_the_way(monkeypatch):
         "upload_ip_max",
     ):
         monkeypatch.setattr(settings, name, 1_000_000)
+
+
+@pytest.fixture(autouse=True)
+def _worker_beating(migrated_engine, _db_override):
+    """`GET /health/ops` answers a documented 503 while no worker beats, and
+    Schemathesis counts every 5xx as a server error whatever the schema says.
+    A fresh heartbeat (and an empty database) keeps it green for this run;
+    the 503s have their own tests (`test_phase5a_worker.py`)."""
+    from app.services import worker_status
+
+    worker_status.heartbeat(sessionmaker(bind=migrated_engine))
 
 
 @pytest.fixture(autouse=True)

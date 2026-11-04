@@ -16,7 +16,6 @@ import pytest
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from sentry_sdk.transport import Transport
 
 from app.config import settings
 from app.middleware.request_id import RequestId
@@ -243,31 +242,6 @@ def test_an_unhandled_error_is_logged_with_its_request_id(rendered):
 
 
 # --- Sentry ----------------------------------------------------------------------
-
-
-class _Capture(Transport):
-    def __init__(self) -> None:
-        super().__init__()
-        self.events: list[dict] = []
-
-    def capture_envelope(self, envelope) -> None:
-        for item in envelope.items:
-            if item.type == "event":
-                self.events.append(item.payload.json)
-
-
-@pytest.fixture
-def sentry_events():
-    transport = _Capture()
-    assert init_sentry(dsn="https://public@sentry.example.invalid/1", transport=transport)
-    yield transport.events
-    sentry_sdk.get_client().close()
-    for scope in (
-        sentry_sdk.get_global_scope(),
-        sentry_sdk.get_isolation_scope(),
-        sentry_sdk.get_current_scope(),
-    ):
-        scope.set_client(None)
 
 
 def test_sentry_does_not_start_without_a_dsn(monkeypatch):

@@ -2349,6 +2349,28 @@
         "title": "NextAction",
         "type": "object"
       },
+      "OpsHealthResponse": {
+        "description": "`ok` false means at least one alarm is crossed; `failing` names them\n(see `services/ops_health.py`) and nothing more.",
+        "properties": {
+          "failing": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Failing",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "OpsHealthResponse",
+        "type": "object"
+      },
       "PackagingRecordRequest": {
         "description": "S4. One QR per batch, so v1's per-jar `qr_codes` is gone; `unit_count`\nalready equals the jar count.",
         "properties": {
@@ -3072,6 +3094,37 @@
         "summary": "Health"
       }
     },
+    "/health/ops": {
+      "get": {
+        "operationId": "health_ops_health_ops_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpsHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpsHealthResponse"
+                }
+              }
+            },
+            "description": "At least one alarm is red"
+          }
+        },
+        "summary": "Health Ops",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
     "/v2/apiaries": {
       "get": {
         "description": "A farmer's apiaries, with exact coordinates (12 \u00a76, D17).\n\nOnly the owning farmer, field officers and admins reach this\n(`apiary.read`), because the exact hive point is sensitive personal data\n(03 \u00a78.1). A farmer defaults to themselves; staff must name the farmer.",
@@ -3256,7 +3309,7 @@
     },
     "/v2/audit/anchor-health": {
       "get": {
-        "description": "Anchor lag: how far the public witness trails the log (05 \u00a73.6).\n\nA separate endpoint rather than extra fields on /audit/health, so the\nPhase 1 contract does not move. Phase 5's alarms read these fields.",
+        "description": "Anchor lag: how far the public witness trails the log (05 \u00a73.6).\n\nA separate endpoint rather than extra fields on /audit/health, so the\nPhase 1 contract does not move. `last_error` is only ever the calendar's\nrefusal, never an arbitrary exception (which could name internal hosts).",
         "operationId": "anchor_health_v2_audit_anchor_health_get",
         "responses": {
           "200": {
