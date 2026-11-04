@@ -16,11 +16,12 @@ from app.enums import (
 )
 from app.models.anchor import MerkleAnchor
 from app.models.audit import AuditLog, ConsentRecord
-from app.models.auth import IdempotencyKey, RefreshToken
+from app.models.auth import IdempotencyKey, RateLimitEvent, RefreshToken
 from app.models.batch import HoneyBatch
 from app.models.comms import Communication, VerificationCode
 from app.models.identity import Farmer, User
 from app.models.media import Document
+from app.models.ops import WorkerStatus
 from app.models.stages import (
     ApiaryLocation,
     ApiaryRecord,
@@ -59,9 +60,11 @@ __all__ = [
     "MerkleAnchor",
     "PackagingRecord",
     "ProcessRecord",
+    "RateLimitEvent",
     "RefreshToken",
     "Role",
     "ScanStatus",
     "User",
     "VerificationCode",
+    "WorkerStatus",
 ]

@@ -60,7 +60,7 @@ def create_root_admin(db: Session, *, username: str, full_name: str, password: s
         subject_type="user",
         subject_id=str(user.id),
         action="user.bootstrapped",
-        payload={"user_id": user.id, "username": username},
+        payload={"user_id": user.id},  # no username: ids only (14 §0 #9)
     )
     return user.id
 

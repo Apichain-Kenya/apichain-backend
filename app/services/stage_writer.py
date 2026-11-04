@@ -53,7 +53,7 @@ def record_stage(
     request: Request,
     *,
     actor: User,
-    idempotency_key: str | None,
+    idempotency_key: str,
     batch_id: int,
     target: BatchState,
     action: str,

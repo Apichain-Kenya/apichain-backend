@@ -6,9 +6,9 @@ no second audit row); a same-key/different-body request is a conflict.
 `finish()` fills in the response, in the caller's transaction, so it commits
 atomically with the domain write and audit row.
 
-Phase 1 policy (08 D6, revised): the header is *honored when present*, not
-required — enforcement lands with the offline client in Phase 4, which always
-sends one. A request without the header behaves normally.
+The header is required on every mutating route since P4a-A (12 D7), so a key
+is always present here; Phase 1's "honored when present" path is gone (14
+P5-A).
 
 **Reserve-then-update (P3-A, 10 §4).** Phase 1 made `begin()` a pure read and
 `finish()` an INSERT, so two genuinely concurrent same-key requests both passed
@@ -48,9 +48,9 @@ class Replay:
 
 @dataclass
 class IdemHandle:
-    key: str | None
+    key: str
     actor_id: int
-    fingerprint: str | None
+    fingerprint: str
     replay: Replay | None
 
 
@@ -61,7 +61,7 @@ def _fingerprint(body: dict[str, Any]) -> str:
 def begin(
     db: Session,
     *,
-    key: str | None,
+    key: str,
     actor_id: int,
     body: dict[str, Any],
     exclude: frozenset[str] = frozenset(),
@@ -72,8 +72,6 @@ def begin(
     the row already knows would hand out an offline brute-force target and
     sidestep bcrypt. Same key, same action: a replay that differs only in the
     password gets the stored response, which is the right answer to it."""
-    if key is None:
-        return IdemHandle(None, actor_id, None, None)
     fingerprint = _fingerprint({k: v for k, v in body.items() if k not in exclude})
 
     # RETURNING, not rowcount: with ON CONFLICT DO NOTHING a conflicting insert
@@ -114,9 +112,23 @@ def begin(
     )
 
 
+def completed(db: Session, *, key: str, actor_id: int) -> bool:
+    """Whether `(key, actor_id)` already holds a finished response. A pure read
+    that claims nothing: a handler with slow work to do before `begin()` (the
+    apiary locality lookup) asks this first, so a replay skips that work."""
+    return (
+        db.execute(
+            select(IdempotencyKey.key).where(
+                IdempotencyKey.key == key,
+                IdempotencyKey.actor_id == actor_id,
+                IdempotencyKey.response_code.is_not(None),
+            )
+        ).first()
+        is not None
+    )
+
+
 def finish(db: Session, handle: IdemHandle, *, status_code: int, body: dict[str, Any]) -> None:
-    if handle.key is None:
-        return
     db.execute(
         update(IdempotencyKey)
         .where(

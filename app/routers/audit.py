@@ -1,28 +1,43 @@
-"""Audit health endpoint (P1-G).
+"""Audit health endpoints (P1-G, P2-E; read from `worker_status` since P5-D).
 
-Reports the last scheduled integrity result. Liveness fields are unauthenticated
-so an uptime monitor can watch `/v2/audit/health`; the divergent-id detail stays
-in the logs (admin-accessible). On a fresh process that the scheduler has not
-yet run, the first call performs one on-demand check so the answer is real.
+Liveness fields are unauthenticated so an uptime monitor can watch them; the
+divergent-id detail and the worker's own error text stay in the logs and in
+`worker_status`. The worker process writes the job results (14 D9), so every
+API instance gives the same answer. Before the worker has run (a dev box with
+no worker, a fresh deploy) the chain endpoint performs one on-demand check,
+so the answer is still real; the anchor endpoint falls back to this
+process's own view, as it always did.
 """
 
-from datetime import UTC
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AuditLog, MerkleAnchor
+from app.models import WorkerStatus
 from app.schemas.anchor import AnchorHealthResponse
 from app.schemas.audit import AuditHealthResponse
 from app.services import anchoring, integrity
+from app.services.worker_status import ANCHOR_STAMP, INTEGRITY
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 
+def _utc(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value).replace(tzinfo=UTC) if value else None
+
+
 @router.get("/health", response_model=AuditHealthResponse)
 def audit_health(db: Session = Depends(get_db)) -> AuditHealthResponse:
+    row = db.get(WorkerStatus, INTEGRITY)
+    detail = row.detail if row is not None else None
+    if detail and detail.get("checked_at"):
+        return AuditHealthResponse(
+            chain_ok=detail["chain_ok"],
+            checked_at=_utc(detail["checked_at"]),
+            rows_checked=detail["rows_checked"],
+        )
     status = integrity.current_status()
     if status.checked_at is None:
         status = integrity.check_with_session(db)
@@ -38,34 +53,38 @@ def anchor_health(db: Session = Depends(get_db)) -> AnchorHealthResponse:
     """Anchor lag: how far the public witness trails the log (05 §3.6).
 
     A separate endpoint rather than extra fields on /audit/health, so the
-    Phase 1 contract does not move. Phase 5's alarms read these fields.
+    Phase 1 contract does not move. `last_error` is only ever the calendar's
+    refusal, never an arbitrary exception (which could name internal hosts).
     """
-    status = anchoring.current_status()
-    last_anchored = db.execute(select(func.max(MerkleAnchor.to_audit_id))).scalar_one_or_none()
+    row = db.get(WorkerStatus, ANCHOR_STAMP)
+    detail = row.detail if row is not None and row.detail else None
+    if detail is not None:
+        anchor_ok = bool(detail.get("anchor_ok", True))
+        last_run_at = _utc(detail.get("last_run_at"))
+        last_anchor_id = detail.get("last_anchor_id")
+        waiting_on = detail.get("waiting_on_audit_id")
+        last_error = detail.get("last_error")
+    else:
+        status = anchoring.current_status()
+        anchor_ok = status.anchor_ok
+        last_run_at = status.last_run_at
+        last_anchor_id = status.last_anchor_id
+        waiting_on = status.waiting_on_audit_id
+        last_error = status.last_error
 
-    # Audit ids are positive, so "everything" is simply "> 0" when nothing has
-    # been anchored yet — no branch, and no subquery to accidentally cross-join.
-    unanchored_from = last_anchored if last_anchored is not None else 0
-    pending_rows = db.execute(
-        select(func.count()).select_from(AuditLog).where(AuditLog.id > unanchored_from)
-    ).scalar_one()
-    oldest_unanchored = db.execute(
-        select(func.min(AuditLog.created_at)).where(AuditLog.id > unanchored_from)
-    ).scalar_one_or_none()
-    pending_anchors = db.execute(
-        select(func.count()).select_from(MerkleAnchor).where(MerkleAnchor.verified_at.is_(None))
-    ).scalar_one()
-
+    backlog = anchoring.backlog(db)
     return AnchorHealthResponse(
-        anchor_ok=status.anchor_ok,
-        last_run_at=status.last_run_at,
-        last_anchor_id=status.last_anchor_id,
-        last_anchored_audit_id=last_anchored,
-        waiting_on_audit_id=status.waiting_on_audit_id,
-        pending_rows=pending_rows,
+        anchor_ok=anchor_ok,
+        last_run_at=last_run_at,
+        last_anchor_id=last_anchor_id,
+        last_anchored_audit_id=backlog.last_anchored_audit_id,
+        waiting_on_audit_id=waiting_on,
+        pending_rows=backlog.pending_rows,
         oldest_unanchored_at=(
-            oldest_unanchored.replace(tzinfo=UTC) if oldest_unanchored is not None else None
+            backlog.oldest_unanchored_at.replace(tzinfo=UTC)
+            if backlog.oldest_unanchored_at is not None
+            else None
         ),
-        pending_anchors=pending_anchors,
-        last_error=status.last_error,
+        pending_anchors=backlog.pending_anchors,
+        last_error=last_error,
     )

@@ -35,13 +35,13 @@ class Settings(BaseSettings):
     geocoder_backend: str = "nominatim"
     bcrypt_rounds: int = 12
 
-    # Audit-chain integrity check (P1-G). The scheduler is disabled in tests.
-    scheduler_enabled: bool = True
+    # Audit-chain integrity check (P1-G). Every scheduled job runs in the
+    # worker process (`python -m app.worker`, P5-D), never in the API.
     integrity_check_interval_seconds: int = 300
 
-    # Anchoring (P2-A, 09 §4). `anchor_enabled` is a second switch on top of
-    # `scheduler_enabled` so anchoring can be off in a dev or staging box that
-    # has no outbound network while the integrity job keeps running.
+    # Anchoring (P2-A, 09 §4). `anchor_enabled` lets a dev or staging worker
+    # with no outbound network keep checking chain integrity without failing
+    # an anchor run every tick.
     anchor_enabled: bool = True
     anchor_target: AnchorTarget = AnchorTarget.opentimestamps
     anchor_interval_seconds: int = 300  # dev; ~3600 in staging/prod via env
@@ -84,7 +84,9 @@ class Settings(BaseSettings):
     at_sandbox: bool = True
     at_timeout_seconds: float = 10.0
     # The log-only fakes redact recipients and mask digits unless this is set.
-    # Dev machines only: it puts verification codes in the log.
+    # Dev machines only: it puts verification codes in the log. The recipient
+    # stays masked even then: every log line passes the P5-C redaction, which
+    # masks phones and emails but leaves a 6-digit code readable.
     dev_log_message_bodies: bool = False
     email_backend: Literal["smtp", "fake"] = "smtp"
     smtp_host: str = "localhost"
@@ -107,6 +109,50 @@ class Settings(BaseSettings):
     comms_batch_size: int = 50
     comms_max_attempts: int = 3
     comms_claim_timeout_seconds: int = 300
+
+    # Deployment environment. `production` adds HSTS (P5-B); P5-K's startup
+    # guard keys off it too.
+    app_env: Literal["development", "production"] = "development"
+
+    # Rate limits (P5-B, 14 D7). Login failures count per (identifier, IP) and
+    # per identifier, so someone typing a farmer's number wrong locks out only
+    # their own address; IP limits are generous because Kenyan carriers put
+    # many phones behind one address. Counters key on a peppered hash, so the
+    # table holds no phone, username or IP; the pepper is dev-only here.
+    rate_limit_pepper: str = "dev-only-rate-limit-pepper-change-me"
+    login_window_seconds: int = 15 * 60
+    login_pair_failures_max: int = 10
+    login_identifier_failures_max: int = 50
+    login_ip_attempts_max: int = 100
+    password_change_window_seconds: int = 15 * 60
+    password_change_failures_max: int = 5
+    ip_hourly_window_seconds: int = 60 * 60
+    verification_send_ip_max: int = 30
+    upload_ip_max: int = 60
+    # The header a trusted proxy sets to the client's address
+    # (`do-connecting-ip` on App Platform). Unset, the socket address is used
+    # and every forwarding header is ignored, so a client cannot pick its own.
+    trusted_proxy_header: str | None = None
+
+    # The worker and its alarms (P5-D, 14 §1 Acceptance, D8). `/health/ops`
+    # turns 503 when any of these is crossed; each sits above the worker's
+    # own grace (two anchor intervals on a sequence gap).
+    worker_heartbeat_seconds: int = 30
+    rate_limit_prune_interval_seconds: int = 3600
+    ops_heartbeat_intervals: int = 3
+    ops_anchor_failure_runs: int = 3
+    ops_anchor_lag_intervals: int = 4
+    ops_pending_upgrade_hours: int = 24
+    ops_comms_backlog_minutes: int = 60
+
+    # Logs and error tracking (P5-C, 14 D10, D11). Unset, the format follows
+    # `app_env`: JSON in production, plain console lines in development.
+    log_level: str = "INFO"
+    log_format: Literal["json", "console"] | None = None
+    # Sentry runs only when a DSN is set; every event is redacted first.
+    sentry_dsn: str | None = None
+    # The build's git SHA, set by the image (`Dockerfile` `GIT_SHA`).
+    app_release: str | None = None
 
     @field_validator("ots_calendar_urls")
     @classmethod

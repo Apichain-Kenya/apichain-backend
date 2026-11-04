@@ -9,9 +9,14 @@ RUN uv sync --frozen --no-dev
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-# The two operator scripts a deployment needs (13 D3): the first admin, and the
-# root admin's recovery. Dev-only scripts (seeds, the live walk) stay out.
-COPY scripts/create_admin.py scripts/reset_root.py ./scripts/
+# The operator scripts a deployment needs: the first admin and the root admin's
+# recovery (13 D3), and the locality backfill (14 D19). Dev-only scripts (seeds,
+# the live walk) stay out.
+COPY scripts/create_admin.py scripts/reset_root.py scripts/backfill_locality.py ./scripts/
+# The build's git SHA, Sentry's release tag (P5-C). The deploy passes it with
+# `--build-arg GIT_SHA=...`; a local build is tagged "dev".
+ARG GIT_SHA=dev
+ENV APP_RELEASE=$GIT_SHA
 RUN useradd --create-home apichain && chown -R apichain /srv
 USER apichain
 EXPOSE 8000

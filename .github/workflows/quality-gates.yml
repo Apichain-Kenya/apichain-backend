@@ -2,19 +2,79 @@
 # "share one reusable CI workflow across both repos to stop drift"). Hosted in
 # apichain-backend; apichain-client calls it cross-repo. Carries only the jobs
 # that are identical for both repos; language-specific jobs stay per-repo.
+#
+# Supply chain (P5-E): every action is pinned to a full commit SHA, and every
+# downloaded binary is checked against a sha256 written here. Trivy is run from
+# its release binary, never `aquasecurity/trivy-action`, whose tags were
+# force-pushed to credential-stealing code in March 2026 (CVE-2026-33634).
+# CodeQL is not here: GitHub's default setup runs it in both repos (14 P5-E).
 name: quality-gates
 
 on:
   workflow_call:
+    inputs:
+      scan-image:
+        description: Build the repo's Dockerfile and fail on fixable HIGH/CRITICAL findings
+        type: boolean
+        default: false
+      build-args:
+        description: Space-separated NAME=value pairs passed as --build-arg
+        type: string
+        default: ""
+
+permissions:
+  contents: read
 
 jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # full history for the gitleaks secret scan
+          persist-credentials: false
       - name: Secret scan (gitleaks binary, no org license needed)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          echo "${GITLEAKS_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "${tarball}" gitleaks
           ./gitleaks git . --no-banner --redact --exit-code 1
+
+  # Trivy fails on HIGH or CRITICAL findings that have a fix (14 P5-E). A
+  # finding with no fix is reported but does not fail. To accept one that has
+  # a fix, add its id to the repo's `.trivyignore` with a reason on the line
+  # above it.
+  image-scan:
+    if: ${{ inputs.scan-image }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image (fresh base)
+        env:
+          BUILD_ARGS: ${{ inputs.build-args }}
+        run: |
+          args=()
+          for pair in $BUILD_ARGS; do args+=(--build-arg "$pair"); done
+          docker build --pull "${args[@]}" -t ci-image:scan .
+      - name: Install Trivy (release binary, checksum-verified)
+        env:
+          TRIVY_VERSION: 0.76.1
+          TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+        run: |
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfLO "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${tarball}"
+          echo "${TRIVY_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "${tarball}" trivy
+      - name: Scan image (fixable HIGH/CRITICAL fail)
+        run: |
+          ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --no-progress ci-image:scan
+      - name: Report unfixed HIGH/CRITICAL (informational)
+        if: always()
+        run: ./trivy image --scanners vuln --severity HIGH,CRITICAL --no-progress ci-image:scan

@@ -17,8 +17,10 @@ dependencies = [
     "pyjwt>=2.10",
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
+    "sentry-sdk[fastapi]>=2.73.0",
     "shapely>=2.1.2",
     "sqlalchemy>=2.0.51",
+    "structlog>=26.1.0",
     "uvicorn[standard]>=0.51.0",
 ]
 
@@ -27,6 +29,7 @@ dev = [
     "httpx>=0.28.1",
     "mypy>=2.3.0",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.22",
     "schemathesis>=4.23.0",
 ]
@@ -34,6 +37,16 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+# The coverage floor (14 P5-E): the measured total minus one point. Raise it
+# when coverage rises; never lower it. CI runs `pytest --cov`.
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+# Measured 2026-11-04: 95.40% (statements + branches, 797 tests).
+fail_under = 94.4
 
 [tool.ruff]
 line-length = 100

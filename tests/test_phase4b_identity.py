@@ -117,7 +117,7 @@ def test_bootstrap_creates_one_root_admin_and_audits_without_the_password(client
         False,
     )
     [payload] = _payloads(migrated_engine, "user.bootstrapped")
-    assert payload == {"user_id": user_id, "username": "groot"}
+    assert payload == {"user_id": user_id}  # ids only since P5-A (14 §0 #9)
     assert _login(client, "groot", STAFF_PW).status_code == 200
 
 
@@ -163,12 +163,8 @@ def test_admin_creates_a_staff_account_that_must_change_its_password(client, mig
     assert STAFF_PW not in json.dumps(body)
 
     [payload] = _payloads(migrated_engine, "user.created")
-    assert payload == {
-        "user_id": body["id"],
-        "username": "jmwende",
-        "role": "operator",
-        "created_by": admin,
-    }
+    # Ids only since P5-A (14 §0 #9): the username lives in `users`.
+    assert payload == {"user_id": body["id"], "role": "operator", "created_by": admin}
 
 
 def test_only_the_root_admin_creates_another_admin(client, migrated_engine):

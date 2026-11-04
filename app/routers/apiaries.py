@@ -28,6 +28,16 @@ _require_create = requires("apiary.create")
 _require_read = requires("apiary.read")
 
 
+def _farmer_for(db: Session, actor: User, farmer_id: int) -> Farmer:
+    farmer = db.get(Farmer, farmer_id)
+    if farmer is None:
+        raise APIError(404, "farmer_not_found", "Farmer does not exist", {"farmer_id": farmer_id})
+    # A farmer may only seed their own sites. Field officers and admins enroll
+    # on someone's behalf, so they are not restricted.
+    ownership.assert_acts_for_farmer(db, actor, farmer.id)
+    return farmer
+
+
 @router.post(
     "",
     response_model=ApiaryResponse,
@@ -42,27 +52,28 @@ def create_apiary(
     actor: User = Depends(_require_create),
     geocoder: geocode.Geocoder = Depends(get_geocoder),
 ) -> ApiaryResponse | JSONResponse:
+    actor_id = actor.id
+    farmer = _farmer_for(db, actor, body.farmer_id)
+
+    # The locality lookup goes out at 2 dp, never the exact point (12 D12).
+    # It runs after the ownership check and only for a request that is not a
+    # replay, so a refused or replayed request never reaches the third party.
+    # The read transaction ends first, so the up-to-3 s call holds no pooled
+    # connection (14 D19). It is fail-soft and precedes the audit append, so
+    # nothing fallible follows the append.
+    locality = None
+    if not idempotency.completed(db, key=idempotency_key, actor_id=actor_id):
+        db.rollback()
+        locality = geocoder(*geocode.locality_point(body.latitude, body.longitude))
+
     idem = idempotency.begin(
-        db, key=idempotency_key, actor_id=actor.id, body=body.model_dump(mode="json")
+        db, key=idempotency_key, actor_id=actor_id, body=body.model_dump(mode="json")
     )
     if idem.replay is not None:
         return JSONResponse(status_code=idem.replay.status_code, content=idem.replay.body)
-
-    farmer = db.get(Farmer, body.farmer_id)
-    if farmer is None:
-        raise APIError(
-            404, "farmer_not_found", "Farmer does not exist", {"farmer_id": body.farmer_id}
-        )
-
-    # A farmer may only seed their own sites. Field officers and admins enroll
-    # on someone's behalf, so they are not restricted.
-    ownership.assert_acts_for_farmer(db, actor, farmer.id)
-
-    # The locality lookup goes out at 2 dp, never the exact point (12 D12).
-    # It is fail-soft and runs before the audit append, so nothing fallible
-    # follows the append; it runs after the ownership check, so a refused or
-    # replayed request never reaches the third party.
-    locality = geocoder(*geocode.locality_point(body.latitude, body.longitude))
+    # Read again in the write transaction: the rows loaded above were expired
+    # when the read transaction ended.
+    farmer = _farmer_for(db, actor, body.farmer_id)
 
     apiary = ApiaryLocation(
         farmer_id=farmer.id,
@@ -85,11 +96,9 @@ def create_apiary(
         subject_type="apiary",
         subject_id=str(apiary.id),
         action="apiary.created",
-        payload={
-            "apiary_id": apiary.id,
-            "farmer_id": farmer.id,
-            "name": apiary.name,
-        },
+        # No name: farmers often name an apiary after themselves, and an
+        # audit payload outlives any erasure of the row (14 §0 #9).
+        payload={"apiary_id": apiary.id, "farmer_id": farmer.id},
         ip=ip,
         user_agent=user_agent,
     )

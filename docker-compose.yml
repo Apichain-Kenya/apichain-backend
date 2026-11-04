@@ -5,7 +5,7 @@ services:
     build: .
     ports: ["8000:8000"]
     env_file: .env
-    environment:
+    environment: &stack-env
       DATABASE_URL: postgresql+psycopg://apichain:apichain@db:5432/apichain_v2
       # Phase 3b boundaries, pointed at the services below. Presigned URLs
       # are signed for the browser-reachable host, not the in-cluster one.
@@ -21,6 +21,21 @@ services:
         "uv", "run", "--no-sync", "uvicorn", "app.main:app",
         "--host", "0.0.0.0", "--port", "8000", "--reload",
       ]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Every scheduled job: integrity, anchoring, milestone messages, the
+  # heartbeat (P5-D). The API process no longer runs any. Restart it after
+  # editing job code; it has no reload.
+  worker:
+    build: .
+    env_file: .env
+    environment: *stack-env
+    volumes:
+      - ./app:/srv/app
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.worker"]
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
