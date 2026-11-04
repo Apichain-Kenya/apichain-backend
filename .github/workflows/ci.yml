@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -23,10 +26,12 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://apichain:apichain@localhost:5432/apichain_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
 
@@ -42,8 +47,9 @@ jobs:
       - name: Type check (mypy)
         run: uv run mypy
 
-      - name: Tests (unit + integration + contract, real Postgres/PostGIS)
-        run: uv run pytest -q
+      # The floor is `fail_under` in pyproject.toml (14 P5-E): it only goes up.
+      - name: Tests (unit + integration + contract, real Postgres/PostGIS) + coverage floor
+        run: uv run pytest -q --cov --cov-report=term
 
       - name: OpenAPI schema is up to date (contract guardrail)
         run: |
@@ -55,14 +61,10 @@ jobs:
           uv export --frozen --no-dev --format requirements-txt > requirements-audit.txt
           uv tool run pip-audit -r requirements-audit.txt --disable-pip
 
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build image
-        run: docker build --build-arg GIT_SHA=${{ github.sha }} -t apichain-backend:ci .
-
-  # Shared, reusable cross-repo gates (05 §6.2 guardrail 4). Secret scan lives
-  # here so both repos run byte-identical logic; drift cannot creep back in.
+  # Shared, reusable cross-repo gates (05 §6.2 guardrail 4): the secret scan
+  # and the image build + Trivy scan run byte-identical logic in both repos.
   shared:
     uses: ./.github/workflows/quality-gates.yml
+    with:
+      scan-image: true
+      build-args: GIT_SHA=${{ github.sha }}
