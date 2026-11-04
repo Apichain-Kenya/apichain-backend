@@ -138,6 +138,35 @@ def test_a_login_is_logged_with_its_request_id_and_without_the_phone(client, ren
     assert PASSWORD not in rendered.raw()
 
 
+def test_a_line_logged_inside_a_sync_handler_carries_the_request_id(client, rendered, monkeypatch):
+    """The login route is a plain `def`, so it runs in the threadpool; the
+    request id has to cross that hop to reach the limiter's warning."""
+    monkeypatch.setattr(settings, "login_ip_attempts_max", 0)
+    monkeypatch.setattr(logging.getLogger("apichain.rate_limit"), "disabled", False)
+    res = client.post(
+        "/v2/auth/login",
+        json={"identifier": LOCAL_PHONE, "password": PASSWORD},
+        headers={"X-Request-ID": "walk-0003-limit"},
+    )
+    assert res.status_code == 429
+
+    limited = [line for line in rendered() if line["logger"] == "apichain.rate_limit"]
+    assert limited and limited[-1]["request_id"] == "walk-0003-limit"
+    assert DIGITS not in rendered.raw()
+
+
+def test_dev_message_bodies_keep_the_code_but_mask_the_recipient(rendered, monkeypatch):
+    from app.services.dev_fakes import LogSms
+
+    monkeypatch.setattr(settings, "dev_log_message_bodies", True)
+    monkeypatch.setattr(logging.getLogger("apichain.dev_fakes"), "disabled", False)
+    LogSms().send(PHONE, "Your ApiChain code is 482913")
+
+    line = rendered()[-1]["event"]
+    assert "482913" in line
+    assert DIGITS not in line
+
+
 def test_the_access_line_leaves_out_the_query_string(client, rendered):
     client.get(f"/v2/farmers?q={LOCAL_PHONE}")
     access = [line for line in rendered() if line["logger"] == "apichain.access"][-1]

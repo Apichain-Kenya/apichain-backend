@@ -84,7 +84,9 @@ class Settings(BaseSettings):
     at_sandbox: bool = True
     at_timeout_seconds: float = 10.0
     # The log-only fakes redact recipients and mask digits unless this is set.
-    # Dev machines only: it puts verification codes in the log.
+    # Dev machines only: it puts verification codes in the log. The recipient
+    # stays masked even then: every log line passes the P5-C redaction, which
+    # masks phones and emails but leaves a 6-digit code readable.
     dev_log_message_bodies: bool = False
     email_backend: Literal["smtp", "fake"] = "smtp"
     smtp_host: str = "localhost"

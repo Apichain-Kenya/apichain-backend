@@ -141,8 +141,11 @@ def _window_rows(db: Session, limit: Limit, key_hash: bytes, now: dt.datetime):
     ).one()
 
 
-def _refuse(limit: Limit, oldest: dt.datetime, now: dt.datetime) -> APIError:
-    wait = max(1, math.ceil((oldest + limit.window - now).total_seconds()))
+def _refuse(limit: Limit, oldest: dt.datetime | None, now: dt.datetime) -> APIError:
+    # No event in the window means a limit of 0 (the route switched off): the
+    # wait is a whole window rather than a crash.
+    until = (oldest or now) + limit.window
+    wait = max(1, math.ceil((until - now).total_seconds()))
     logger.warning("rate limited: scope=%s retry_after=%ss", limit.scope, wait)
     return APIError(
         429,
